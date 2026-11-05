@@ -59,7 +59,7 @@ const appMarkup = `
       </div>
     </aside>
     <main class="main-area">
-      <header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><label class="theme-picker"><span>THEME</span><select id="themeSelect" aria-label="Farbschema"><option value="material-dark">Darkmode · Material Dark</option><option value="material-white">Whitemode · Material White</option><option value="muxxle">Muxxle · Dark Red</option></select></label><button class="help-button" id="helpButton">Hilfe</button><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
+      <header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><label class="theme-picker"><span>THEME</span><select id="themeSelect" aria-label="Farbschema"><option value="material-dark">Darkmode · Material Dark</option><option value="material-white">Whitemode · Material White</option><option value="muxxle">Muxxle · Dark Red</option></select></label><button class="help-button" id="helpButton">Hilfe</button><button class="help-button" id="documentationButton">Dokumentation</button><button class="help-button" id="settingsButton" hidden>Einstellungen</button><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
       <div class="page-content">
         <div class="page-heading"><div><div class="eyebrow" id="pageEyebrow">DEIN SERVER-WORKSPACE</div><h1 id="pageTitle">Alles an einem Ort.</h1><p id="pageSubtitle">Verbinde dich sicher mit deinen Servern und behalte den Überblick.</p></div><div class="heading-actions"><button class="button button-secondary" id="quickTerminal" disabled>${icons.terminal}Terminal öffnen</button><button class="button button-primary" id="headingAdd">${icons.plus}Server verbinden</button></div></div>
         <div class="route-tabs" id="routeTabs">
@@ -258,6 +258,7 @@ async function mountWorkspace(user) {
   $('#accountUsername').textContent = `@${user.username}`;
   $('#accountAvatar').textContent = user.name.slice(0, 1).toUpperCase();
   $('#headerAvatar').textContent = user.name.slice(0, 1).toUpperCase();
+  $('#settingsButton').hidden = user.role !== 'admin';
   bindEvents();
   await loadWorkspace();
   if (user.mustChangePassword || !user.email) openAccountModal(Boolean(user.mustChangePassword), !user.email);
@@ -307,9 +308,10 @@ function renderHosts() {
   $('#hostList').innerHTML = hosts.length ? hosts.map(host => {
     const session = sessionFor(host.id);
     const active = session?.id === state.activeId;
-    return `<button class="host-row ${active ? 'selected' : ''} ${session ? 'is-connected' : ''}" data-host-id="${escapeHtml(host.id)}"><span class="host-glyph">${icons.server}<i class="${session ? 'online' : ''}"></i></span><span class="host-row-copy"><b>${escapeHtml(host.name)}</b><small>${escapeHtml(host.username)}@${escapeHtml(host.host)}</small></span><span class="host-row-actions"><span class="host-state-dot ${session ? 'on' : ''}"></span>${!session ? `<span class="host-chevron">${icons.chevron}</span>` : ''}</span></button>`;
+    return `<div class="host-row ${active ? 'selected' : ''} ${session ? 'is-connected' : ''}"><button class="host-row-main" data-host-id="${escapeHtml(host.id)}"><span class="host-glyph">${icons.server}<i class="${session ? 'online' : ''}"></i></span><span class="host-row-copy"><b>${escapeHtml(host.name)}</b><small>${escapeHtml(host.username)}@${escapeHtml(host.host)}</small></span><span class="host-row-actions"><span class="host-state-dot ${session ? 'on' : ''}"></span>${!session ? `<span class="host-chevron">${icons.chevron}</span>` : ''}</span></button><button type="button" class="host-row-menu" data-menu="${escapeHtml(host.id)}" aria-label="Optionen für ${escapeHtml(host.name)}">${icons.dots}</button></div>`;
   }).join('') : `<div class="side-empty">${query ? 'Keine Treffer.' : 'Noch keine Server gespeichert.'}</div>`;
   $('#hostList').querySelectorAll('[data-host-id]').forEach(row => row.addEventListener('click', () => selectHost(row.dataset.hostId)));
+  $('#hostList').querySelectorAll('[data-menu]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); openHostMenu(button.dataset.menu, button); }));
   renderOverview();
 }
 
@@ -334,7 +336,8 @@ function openHostMenu(hostId, button) {
   const menu = document.createElement('div');
   menu.className = 'host-popover';
   menu.innerHTML = `<button data-action="connect">${icons.terminal}Verbinden</button><button data-action="delete" class="delete-action">${icons.close}Server entfernen</button>`;
-  button.closest('.server-card').append(menu);
+  const anchor = button.closest('.server-card, .host-row');
+  anchor.append(menu);
   menu.querySelector('[data-action="connect"]').onclick = () => { menu.remove(); selectHost(hostId); };
   menu.querySelector('[data-action="delete"]').onclick = async () => {
     menu.remove();
@@ -507,6 +510,65 @@ function openAuthModal(host, targetRoute) {
   });
 }
 
+function openDocumentation() {
+  const modalRoot = $('#modalRoot');
+  if (!modalRoot) return;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-card documentation-modal" aria-labelledby="documentationTitle"><div class="modal-top"><div><div class="eyebrow">NEXTERM DESK · HANDBUCH</div><h2 id="documentationTitle">Dokumentation</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><div class="documentation-content">
+    <section><h3>1. Anmeldung und Betriebsarten</h3><p>Ein Konto enthält deine eigenen Workspaces und Serverprofile. Die Desktop-App kann einen lokalen Tresor auf diesem PC oder eine NexTerm-Webserver-Instanz verwenden. Im lokalen Modus bleiben Kontodaten und Serverprofile auf diesem Gerät verschlüsselt; im Webmodus liegen sie auf der verbundenen Instanz. Die Desktop-App merkt sich beim Webmodus nur die Serveradresse.</p></section>
+    <section><h3>2. Workspaces</h3><p>Öffne links oben den Workspace-Schalter, um einen Workspace zu wechseln, umzubenennen oder einen neuen anzulegen. Jeder Workspace hat seine eigene Serverliste. Beim Wechsel werden die aktiven SSH-Sitzungen beendet. Ein Workspace kann samt seinen Verbindungen gelöscht werden.</p></section>
+    <section><h3>3. Server hinzufügen und entfernen</h3><p>Wähle <b>Server hinzufügen</b> und trage Anzeigename, Hostname oder IP-Adresse, SSH-Port und Benutzernamen ein. Das Profil speichert keine SSH-Passwörter oder privaten Schlüssel. Zum Entfernen öffnest du beim Server in der linken Liste das Drei-Punkte-Menü und wählst <b>Server entfernen</b>. Eine aktive Sitzung wird dabei getrennt; das Profil wird aus dem aktuellen Workspace gelöscht.</p></section>
+    <section><h3>4. SSH-Verbindung</h3><p>Klicke auf einen Server und wähle die Anmeldung mit SSH-Passwort oder privatem Schlüssel. Eine Schlüsseldatei kann optional mit einer Passphrase geschützt sein. Diese Zugangsdaten werden nur für den Verbindungsaufbau verwendet und nicht im NexTerm-Profil gespeichert. Beim ersten Kontakt zeigt NexTerm den Host-Fingerabdruck. Prüfe ihn über einen vertrauenswürdigen Weg mit deinem Server ab; eine unerwartete Änderung kann auf einen falschen Server oder einen Angriff hindeuten.</p></section>
+    <section><h3>5. Terminal</h3><p>Nach der Verbindung öffnet sich das SSH-Terminal. Die Terminalgröße passt sich dem Fenster an. Über die Schaltfläche zum Leeren wird nur die lokale Terminalanzeige geleert; <b>Verbindung trennen</b> beendet die SSH-Sitzung.</p></section>
+    <section><h3>6. Dateien per SFTP</h3><p>Öffne <b>Dateien</b>, um Ordner auf dem verbundenen Server zu durchsuchen. Du kannst Dateien hochladen, per Drag-and-drop übertragen und Dateien über das Download-Symbol auf deinen PC laden. Die Übertragung läuft über dieselbe verschlüsselte SSH-Verbindung. Der Serverbenutzer braucht passende Datei- und Ordnerrechte.</p></section>
+    <section><h3>7. Monitoring</h3><p>Die Live-Karten zeigen CPU, RAM, Root-Dateisystem und Netzwerkdurchsatz und aktualisieren sich etwa alle drei Sekunden. Werte werden direkt vom Zielserver gelesen und in NexTerm nicht gespeichert. Die Monitoring-Abfragen benötigen derzeit ein Linux-Zielsystem mit den üblichen <code>/proc</code>-Dateien und <code>df</code>.</p></section>
+    <section><h3>8. Theme und Kontosicherheit</h3><p>Wähle oben rechts <b>Material Dark</b>, <b>Material White</b> oder <b>Muxxle</b>. Die Auswahl wird deinem Konto zugeordnet und bei der nächsten Anmeldung wiederhergestellt. Über dein Profil kannst du E-Mail-Adresse und Passwort ändern sowie OTP oder Passkeys einrichten. Bewahre die angezeigten Wiederherstellungscodes sicher auf: Sie sind Einmalcodes und werden nach der Einrichtung nicht erneut angezeigt. Bestätige, dass du sie gespeichert hast, bevor du OTP oder Passkey aktivierst.</p></section>
+    <section><h3>9. Admin-Nutzerverwaltung</h3><p>Admins sehen oben rechts <b>Einstellungen</b> und können dort unter <b>Users</b> ein temporäres Passwort für ein anderes Konto setzen. Dafür muss das Admin-Passwort erneut eingegeben werden. Das betroffene Konto wird abgemeldet und muss das temporäre Passwort direkt nach der nächsten Anmeldung ändern. Das eigene Passwort änderst du in deinen Kontoeinstellungen.</p></section>
+    <section><h3>10. Hinweise zur Serverinstanz</h3><p>Für den Zugriff über das Internet müssen HTTPS und WebSocket-Weiterleitung für `/terminal` eingerichtet sein. E-Mail-Passwort-Resets funktionieren nur, wenn der Betreiber den Mailversand serverseitig aktiviert und SMTP konfiguriert hat. Bei einer lokalen Desktop-Anmeldung ist ein externer Mailversand nicht automatisch verfügbar.</p></section>
+  </div></section></div>`;
+  modalRoot.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
+  modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) modalRoot.innerHTML = ''; });
+}
+
+async function openAdminSettings() {
+  if (state.user?.role !== 'admin') return;
+  const modalRoot = $('#modalRoot');
+  if (!modalRoot) return;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-card settings-modal"><div class="modal-top"><div><div class="eyebrow">ADMIN-EINSTELLUNGEN</div><h2>Einstellungen</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><div class="inline-empty"><span class="spinner"></span><b>Users werden geladen</b></div></section></div>`;
+  modalRoot.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
+  modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) modalRoot.innerHTML = ''; });
+  try {
+    const users = await api('/api/admin/users');
+    if (!modalRoot.querySelector('.settings-modal')) return;
+    const modal = modalRoot.querySelector('.settings-modal');
+    modal.innerHTML = `<div class="modal-top"><div><div class="eyebrow">ADMIN-EINSTELLUNGEN</div><h2>Einstellungen</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><div class="settings-content"><div class="settings-section-heading"><div><span class="eyebrow">KONTEN</span><h3>Users</h3></div><span class="count-pill">${users.length}</span></div><p class="account-help">Setze bei Bedarf ein temporäres Passwort. Das Konto wird abgemeldet und muss es beim nächsten Login ändern.</p><div class="admin-user-list">${users.map(user => `<article class="admin-user-row"><div class="admin-user-info"><b>${escapeHtml(user.name)} <small>@${escapeHtml(user.username)}</small></b><span>${escapeHtml(user.email || 'Keine E-Mail-Adresse')}</span><small>${user.role === 'admin' ? 'Administrator' : 'Benutzer'}${user.mustChangePassword ? ' · Passwortänderung ausstehend' : ''}</small></div>${user.id === state.user.id ? '<span class="current-user-label">Du</span>' : `<button type="button" class="button button-secondary admin-reset-trigger" data-user="${escapeHtml(user.id)}">Passwort zurücksetzen</button>`}</article>`).join('') || '<p class="account-help">Noch keine Users vorhanden.</p>'}</div></div>`;
+    modal.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
+    modal.querySelectorAll('.admin-reset-trigger').forEach(button => button.addEventListener('click', () => openAdminResetForm(users.find(user => user.id === button.dataset.user))));
+  } catch (error) { toast(error.message, 'error'); modalRoot.innerHTML = ''; }
+}
+
+function openAdminResetForm(user) {
+  if (!user || state.user?.role !== 'admin') return;
+  const modalRoot = $('#modalRoot');
+  const modal = modalRoot?.querySelector('.settings-modal');
+  if (!modal) return;
+  modal.innerHTML = `<div class="modal-top"><div><div class="eyebrow">USER-PASSWORT ZURÜCKSETZEN</div><h2>${escapeHtml(user.name)}</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><p class="account-help">@${escapeHtml(user.username)} wird abgemeldet und muss das neue temporäre Passwort beim nächsten Login ändern.</p><form id="adminResetForm" class="admin-reset-form"><label class="form-field"><span>Temporäres Passwort · mindestens 12 Zeichen</span><input type="password" name="password" minlength="12" maxlength="256" autocomplete="new-password" required></label><label class="form-field"><span>Dein aktuelles Admin-Passwort</span><input type="password" name="adminPassword" autocomplete="current-password" required></label><div class="account-message" id="adminResetError" hidden></div><div class="modal-footer"><button type="button" class="button button-secondary" id="backToUsers">Zurück zu Users</button><button class="button button-primary" type="submit">Passwort zurücksetzen</button></div></form>`;
+  modal.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
+  modal.querySelector('#backToUsers').addEventListener('click', openAdminSettings);
+  modal.querySelector('#adminResetForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      await api(`/api/admin/users/${encodeURIComponent(user.id)}/reset-password`, { method: 'POST', body: JSON.stringify({ password: values.get('password'), adminPassword: values.get('adminPassword') }) });
+      modalRoot.innerHTML = '';
+      toast('Passwort zurückgesetzt. Der User muss es beim nächsten Login ändern.');
+    } catch (error) {
+      const box = modal.querySelector('#adminResetError'); box.textContent = error.message; box.hidden = false; submit.disabled = false;
+    }
+  });
+}
+
 async function openAccountModal(forcePasswordChange = false, forceEmail = false) {
   const modalRoot = $('#modalRoot');
   if (!modalRoot) return;
@@ -516,13 +578,10 @@ async function openAccountModal(forcePasswordChange = false, forceEmail = false)
     modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) modalRoot.innerHTML = ''; });
   }
   let security = { totpEnabled: false, passkeys: [], recoveryCodesRemaining: 0 };
-  let adminUsers = [];
   try { security = await api('/api/auth/security'); } catch (error) { toast(error.message, 'error'); }
-  if (state.user?.role === 'admin') try { adminUsers = await api('/api/admin/users'); } catch (error) { toast(error.message, 'error'); }
   if (!$('#accountModalContent')) return;
-  const adminSection = state.user?.role === 'admin' ? `<section class="account-section"><div class="section-title-row"><div><div class="eyebrow">ADMIN · NUR PASSWORT-RESET</div><h3>Kontopasswörter zurücksetzen</h3></div></div><div class="admin-reset-list" id="adminResetList">${adminUsers.filter(user => user.id !== state.user.id).map(user => `<form class="admin-reset-row" data-user="${escapeHtml(user.id)}"><div><b>${escapeHtml(user.name)} <small>@${escapeHtml(user.username)}</small></b><span>${escapeHtml(user.email || 'Keine E-Mail-Adresse')}</span></div><input type="password" name="password" placeholder="Temporäres Passwort · 12+ Zeichen" minlength="12" maxlength="256" autocomplete="new-password" required><input type="password" name="adminPassword" placeholder="Dein Admin-Passwort" autocomplete="current-password" required><button class="button button-secondary" type="submit">Zurücksetzen</button></form>`).join('') || '<p class="account-help">Es gibt keine anderen Konten zum Zurücksetzen.</p>'}</div></section>` : '';
   const securityStatus = [security.totpEnabled ? 'OTP aktiv' : '', ...security.passkeys.map(passkey => passkey.name), `${security.recoveryCodesRemaining} Wiederherstellungscodes verfügbar`].filter(Boolean).join(' · ') || 'Kein zusätzlicher Faktor aktiviert.';
-  $('#accountModalContent').innerHTML = `<div class="account-scroll"><section class="account-section"><h3>E-Mail-Adresse</h3><p class="account-help">Wird für künftige Passwort-Resets verwendet. Der Mailversand lässt sich serverseitig aktivieren.</p><form id="emailForm" class="account-form"><label class="form-field"><span>E-Mail-Adresse</span><input type="email" name="email" value="${escapeHtml(state.user.email || '')}" maxlength="254" autocomplete="email" required></label><label class="form-field"><span>Passwort bestätigen</span><input type="password" name="currentPassword" autocomplete="current-password" required></label><button class="button button-secondary" type="submit">Speichern</button></form></section><section class="account-section"><h3>Passwort ändern</h3>${forcePasswordChange ? '<p class="account-help">Das Admin-Reset-Passwort muss jetzt durch dein eigenes Passwort ersetzt werden.</p>' : ''}<form id="passwordForm" class="account-form account-password-form"><label class="form-field"><span>${forcePasswordChange ? 'Temporäres Passwort' : 'Aktuelles Passwort'}</span><input type="password" name="currentPassword" autocomplete="current-password" required></label><label class="form-field"><span>Neues Passwort · mindestens 12 Zeichen</span><input type="password" name="newPassword" minlength="12" maxlength="256" autocomplete="new-password" required></label><div class="account-message" id="passwordMessage" hidden></div><button class="button button-primary" type="submit">Passwort ändern</button></form></section>${forcePasswordChange ? '' : `<section class="account-section"><h3>Zwei-Faktor-Anmeldung</h3><p class="account-help">${escapeHtml(securityStatus)} Wiederherstellungscodes sind Einmalcodes und müssen sicher abgelegt werden.</p><label class="form-field security-reauth"><span>Aktuelles Passwort zur Bestätigung</span><input id="securityPassword" type="password" autocomplete="current-password"></label><div class="security-actions"><button class="button button-secondary" id="enableTotp">${security.totpEnabled ? 'OTP ist aktiv' : 'OTP einrichten'}</button><button class="button button-secondary" id="enablePasskey">${security.passkeys.length ? 'Weiteren Passkey hinzufügen' : 'Passkey einrichten'}</button>${security.totpEnabled || security.passkeys.length ? '<button class="button button-danger" id="disableSecurity">Sicherheitsfaktoren deaktivieren</button>' : ''}</div><div class="account-message" id="securityMessage" hidden></div></section>${adminSection}`}</div>`;
+  $('#accountModalContent').innerHTML = `<div class="account-scroll"><section class="account-section"><h3>E-Mail-Adresse</h3><p class="account-help">Wird für künftige Passwort-Resets verwendet. Der Mailversand lässt sich serverseitig aktivieren.</p><form id="emailForm" class="account-form"><label class="form-field"><span>E-Mail-Adresse</span><input type="email" name="email" value="${escapeHtml(state.user.email || '')}" maxlength="254" autocomplete="email" required></label><label class="form-field"><span>Passwort bestätigen</span><input type="password" name="currentPassword" autocomplete="current-password" required></label><button class="button button-secondary" type="submit">Speichern</button></form></section><section class="account-section"><h3>Passwort ändern</h3>${forcePasswordChange ? '<p class="account-help">Das Admin-Reset-Passwort muss jetzt durch dein eigenes Passwort ersetzt werden.</p>' : ''}<form id="passwordForm" class="account-form account-password-form"><label class="form-field"><span>${forcePasswordChange ? 'Temporäres Passwort' : 'Aktuelles Passwort'}</span><input type="password" name="currentPassword" autocomplete="current-password" required></label><label class="form-field"><span>Neues Passwort · mindestens 12 Zeichen</span><input type="password" name="newPassword" minlength="12" maxlength="256" autocomplete="new-password" required></label><div class="account-message" id="passwordMessage" hidden></div><button class="button button-primary" type="submit">Passwort ändern</button></form></section>${forcePasswordChange ? '' : `<section class="account-section"><h3>Zwei-Faktor-Anmeldung</h3><p class="account-help">${escapeHtml(securityStatus)} Wiederherstellungscodes sind Einmalcodes und müssen sicher abgelegt werden.</p><label class="form-field security-reauth"><span>Aktuelles Passwort zur Bestätigung</span><input id="securityPassword" type="password" autocomplete="current-password"></label><div class="security-actions"><button class="button button-secondary" id="enableTotp">${security.totpEnabled ? 'OTP ist aktiv' : 'OTP einrichten'}</button><button class="button button-secondary" id="enablePasskey">${security.passkeys.length ? 'Weiteren Passkey hinzufügen' : 'Passkey einrichten'}</button>${security.totpEnabled || security.passkeys.length ? '<button class="button button-danger" id="disableSecurity">Sicherheitsfaktoren deaktivieren</button>' : ''}</div><div class="account-message" id="securityMessage" hidden></div></section>`}</div>`;
   $('#emailForm')?.addEventListener('submit', async event => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -574,14 +633,6 @@ async function openAccountModal(forcePasswordChange = false, forceEmail = false)
       catch (error) { const box = $('#disableError'); box.textContent = error.message; box.hidden = false; }
     });
   });
-  $('#adminResetList')?.querySelectorAll('form').forEach(form => form.addEventListener('submit', async event => {
-    event.preventDefault();
-    const values = new FormData(form);
-    const password = values.get('password');
-    const adminPassword = values.get('adminPassword');
-    try { await api(`/api/admin/users/${encodeURIComponent(form.dataset.user)}/reset-password`, { method: 'POST', body: JSON.stringify({ password, adminPassword }) }); toast('Passwort zurückgesetzt. Beim nächsten Login muss es geändert werden.'); form.reset(); }
-    catch (error) { toast(error.message, 'error'); }
-  }));
 }
 
 function showRecoveryConfirmation(codes, kind, forcePasswordChange = false) {
@@ -864,7 +915,9 @@ function bindEvents() {
   $('#cancelUpload').addEventListener('click', () => state.currentUpload?.abort());
   $('#disconnectButton').addEventListener('click', () => { const session = activeSession(); if (session) disconnectSession(session.id).then(() => toast('Verbindung getrennt.')); });
   $('#clearTerminal').addEventListener('click', () => { const entry = state.terminalEntries.get(state.activeId); entry?.terminal.clear(); entry?.terminal.focus(); });
-  $('#helpButton').addEventListener('click', () => toast('Füge einen Server hinzu und verbinde dich per Passwort oder privatem SSH-Schlüssel.'));
+  $('#helpButton').addEventListener('click', () => toast('Wähle links einen Server aus. Für SSH, Dateiübertragung, Monitoring und Kontosicherheit öffnest du die Dokumentation.'));
+  $('#documentationButton').addEventListener('click', openDocumentation);
+  $('#settingsButton').addEventListener('click', openAdminSettings);
   $('#logoutButton').addEventListener('click', logoutUser);
   $('#mobileMenu').addEventListener('click', () => $('.sidebar').classList.toggle('mobile-open'));
   document.addEventListener('keydown', event => {

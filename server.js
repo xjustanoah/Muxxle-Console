@@ -866,11 +866,12 @@ app.post('/api/auth/security/disable', requireAuth, async (req, res) => {
 app.use('/api/admin', requireSameOrigin, requireAuth);
 app.get('/api/admin/users', (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
-  res.json((req.data.users || []).map(user => ({ id: user.id, username: user.username, name: user.name, email: user.email || '', mustChangePassword: Boolean(user.mustChangePassword) })));
+  res.json((req.data.users || []).map(user => ({ id: user.id, username: user.username, name: user.name, email: user.email || '', role: user.role || 'user', mustChangePassword: Boolean(user.mustChangePassword) })));
 });
 
 app.post('/api/admin/users/:id/reset-password', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
+  if (req.params.id === req.user.id) return res.status(400).json({ error: 'Das eigene Passwort änderst du in den Kontoeinstellungen.' });
   if (!await verifyAccountPassword(req.user, req.body?.adminPassword)) return res.status(403).json({ error: 'Bestätige das Zurücksetzen mit deinem aktuellen Admin-Passwort.' });
   const password = String(req.body?.password || '');
   if (password.length < 12 || password.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });

@@ -1099,4 +1099,60 @@ html[data-theme] .text-button:hover { color: var(--accent-hover); }
   html[data-theme] .topbar-actions { gap: 8px; }
 }
 
+/* Noah Muxxle brand accents, with account themes still controlling surface colors. */
+:root { --brand-teal: #7ce9df; --brand-white: #f6f8fb; }
+html[data-theme] .app-shell { background: radial-gradient(ellipse at 83% 0%, color-mix(in srgb, var(--brand-teal) 7%, transparent), transparent 34%), var(--bg); }
+html[data-theme] .brand-mark { color: #071312; background: linear-gradient(135deg, var(--brand-white), var(--brand-teal)); border-color: transparent; }
+.topbar .help-button { padding: 5px 0; white-space: nowrap; }
+.topbar .help-button:hover { color: var(--brand-teal); }
+
+/* The server's overflow menu is available in both the sidebar and overview cards. */
+.host-row { position: relative; display: flex; align-items: center; gap: 2px; padding: 2px 3px 2px 0; cursor: default; }
+.host-row-main { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; padding: 6px 5px 6px 8px; border: 0; border-radius: 6px; color: inherit; text-align: left; background: transparent; cursor: pointer; }
+.host-row-menu { width: 26px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; border: 0; border-radius: 5px; color: #8d94a3; background: transparent; cursor: pointer; opacity: .3; transition: .15s ease; }
+.host-row-menu svg { width: 15px; height: 15px; }
+.host-row:hover .host-row-menu, .host-row-menu:focus-visible { opacity: 1; }
+.host-row-menu:hover { color: var(--brand-teal); background: color-mix(in srgb, var(--brand-teal) 10%, transparent); }
+.host-row .host-popover { top: calc(100% - 2px); right: 0; }
+html[data-theme] .host-row-main,
+html[data-theme] .host-row-menu { color: var(--text); }
+html[data-theme] .host-row-menu:hover { color: var(--brand-teal); background: color-mix(in srgb, var(--brand-teal) 10%, transparent); }
+
+/* Documentation and administration dialogs. */
+.documentation-modal { width: min(100%, 850px); }
+.documentation-content { max-height: min(68vh, 720px); overflow: auto; margin-top: 16px; padding-right: 8px; }
+.documentation-content section { padding: 14px 0; border-top: 1px solid #303541; }
+.documentation-content h3 { margin: 0 0 6px; color: #dce2e8; font-size: 13px; font-weight: 650; }
+.documentation-content p { margin: 0; color: #a0a8b6; font-size: 12px; line-height: 1.65; }
+.documentation-content code { color: var(--brand-teal); font: 11px 'DM Mono', monospace; }
+.settings-modal { width: min(100%, 740px); }
+.settings-content { margin-top: 18px; }
+.settings-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.settings-section-heading h3 { margin: 5px 0 0; color: var(--text); font-size: 17px; }
+.admin-user-list { display: grid; gap: 8px; max-height: min(56vh, 560px); overflow: auto; margin-top: 14px; }
+.admin-user-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px solid #343947; border-radius: 8px; background: #171a22; }
+.admin-user-info { min-width: 0; display: grid; gap: 4px; }
+.admin-user-info b { overflow: hidden; color: #dce0e8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-user-info b small { color: #929aaa; font-weight: 400; }
+.admin-user-info > span, .admin-user-info > small { overflow: hidden; color: #8c95a5; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.current-user-label { padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--brand-teal) 28%, transparent); border-radius: 999px; color: var(--brand-teal); font-size: 10px; }
+.admin-reset-form { margin-top: 10px; }
+.admin-reset-form .modal-footer { margin-top: 12px; }
+html[data-theme] .admin-user-row { color: var(--text); background: var(--surface-1); border-color: var(--outline); }
+html[data-theme] .admin-user-info b,
+html[data-theme] .documentation-content h3 { color: var(--text); }
+html[data-theme] .admin-user-info > span,
+html[data-theme] .admin-user-info > small,
+html[data-theme] .documentation-content p { color: var(--dim); }
+html[data-theme] .documentation-content section { border-color: var(--outline); }
+
+@media (max-width: 800px) {
+  .topbar-actions { gap: 10px; }
+  .local-badge { display: none; }
+}
+@media (max-width: 560px) {
+  .topbar .help-button { font-size: 9px; }
+  .admin-user-row { align-items: flex-start; flex-direction: column; }
+}
+
 /* Desktop type and controls stay comfortable at normal viewing distance. */
