@@ -612,7 +612,7 @@ function ensureTerminal(session) {
     layer.className = 'terminal-layer';
     layer.dataset.session = session.id;
     terminalHost.append(layer);
-    const terminal = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 13, fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', lineHeight: 1.42, scrollback: 5000, allowProposedApi: true, theme: terminalThemeFor(document.documentElement.dataset.theme) });
+    const terminal = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 16, fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', lineHeight: 1.42, scrollback: 5000, allowProposedApi: true, theme: terminalThemeFor(document.documentElement.dataset.theme) });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(layer);

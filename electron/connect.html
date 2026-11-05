@@ -10,23 +10,38 @@
   </head>
   <body>
     <main class="shell">
-      <header class="brand"><span class="brand-mark">›_</span><span>NEXTERM<small>DESK</small></span><span class="local-pill"><i></i>DESKTOP</span></header>
-      <section class="intro"><span class="eyebrow">SICHERER SSH-WORKSPACE</span><h1>Wie möchtest<br />du starten?</h1><p>Wähle einen verschlüsselten Tresor auf diesem Gerät oder verbinde dich mit deinem NexTerm-Webserver.</p></section>
+      <header class="brand">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5v14M6 12l8-7M6 12l8 7M14 19h5" /></svg></span>
+        <span class="brand-name">NexTerm <span>Desk</span></span>
+        <span class="local-pill"><i></i>Desktop</span>
+      </header>
+      <section class="intro">
+        <span class="eyebrow">SSH WORKSPACE</span>
+        <h1>Wie möchtest du starten?</h1>
+        <p>Öffne deinen verschlüsselten Tresor auf diesem Gerät oder verbinde dich mit deinem NexTerm-Webserver.</p>
+      </section>
       <section class="choices">
         <article class="choice-card local-card">
-          <div class="choice-icon">⌑</div><div class="choice-label">PRIVAT AUF DIESEM GERÄT</div><h2>Lokaler Tresor</h2>
+          <div class="choice-heading"><div class="choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="7" width="15" height="12" rx="2"/><path d="M8 7V5.8A4 4 0 0 1 12 2a4 4 0 0 1 4 3.8V7M12 12v2.5"/></svg></div><div class="choice-label">AUF DIESEM GERÄT</div></div>
+          <h2>Lokaler Tresor</h2>
           <p>Serverprofile und Kontodaten bleiben auf deinem PC und werden verschlüsselt gespeichert.</p>
-          <ul><li>AES-GCM-Datentresor</li><li>Schlüssel durch Windows geschützt</li><li>Keine Synchronisierung</li></ul>
-          <button id="localButton" class="primary-button" type="button">Lokal starten <span>→</span></button>
+          <ul><li>AES-GCM-verschlüsselte Daten</li><li>Schlüssel durch Windows geschützt</li><li>Keine Synchronisierung</li></ul>
+          <button id="localButton" class="action-button quiet-button" type="button">Lokal starten <span aria-hidden="true">→</span></button>
         </article>
         <article class="choice-card remote-card">
-          <div class="choice-icon">↗</div><div class="choice-label">VERBINDUNG ZU DEINEM SERVER</div><h2>Webserver</h2>
-          <p>Öffne deine NexTerm-Instanz und melde dich dort mit deinem Serverkonto an.</p>
-          <form id="remoteForm" novalidate><label for="serverUrl">Webserver-Adresse</label><input id="serverUrl" name="serverUrl" type="url" autocomplete="url" placeholder="https://ssh.example.com" spellcheck="false" required /><div class="secure-note"><span>▣</span> HTTPS wird für entfernte Server vorausgesetzt.</div><button id="remoteButton" class="secondary-button" type="submit">Webserver verbinden <span>↗</span></button></form>
+          <div class="choice-heading"><div class="choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 5h6v6M19 5 10 14M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></div><div class="choice-label">DEIN SERVER</div></div>
+          <h2>Webserver</h2>
+          <p>Melde dich mit deinem NexTerm-Konto an und öffne deine serverseitigen Verbindungen.</p>
+          <form id="remoteForm" novalidate>
+            <label for="serverUrl">Webserver-Adresse</label>
+            <input id="serverUrl" name="serverUrl" type="url" autocomplete="url" placeholder="https://ssh.example.com" spellcheck="false" required />
+            <div class="secure-note"><span aria-hidden="true">●</span> Für entfernte Server ist HTTPS erforderlich.</div>
+            <button id="remoteButton" class="action-button primary-button" type="submit">Webserver verbinden <span aria-hidden="true">↗</span></button>
+          </form>
         </article>
       </section>
       <div id="launchMessage" class="launch-message" role="status" aria-live="polite" hidden></div>
-      <footer>Private Schlüssel und SSH-Passwörter werden nur für die jeweilige Verbindung verwendet.</footer>
+      <footer><span aria-hidden="true">◆</span> Private Schlüssel und SSH-Passwörter werden nur für die jeweilige Verbindung verwendet.</footer>
     </main>
   </body>
 </html>

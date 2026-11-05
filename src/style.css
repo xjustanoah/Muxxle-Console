@@ -570,6 +570,108 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
 .admin-reset-row span { overflow: hidden; color: #818898; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .admin-reset-row input { min-width: 0; height: 36px; padding: 0 8px; border: 1px solid #343947; border-radius: 6px; color: #e1e3ea; background: #11141b; font-size: 10px; }
 
+
+@media (min-width: 1100px) {
+  .sidebar { width: 310px; flex-basis: 310px; padding: 28px 18px 17px; }
+  .brand-row { height: 42px; margin-bottom: 28px; gap: 12px; }
+  .brand-mark { width: 40px; height: 40px; }
+  .brand-mark svg { width: 23px; height: 23px; }
+  .brand-name { font-size: 18px; }
+  .brand-name span { font-size: 11px; }
+  .workspace-switch { min-height: 68px; padding: 10px; gap: 12px; }
+  .workspace-avatar, .profile-avatar, .avatar-small { width: 38px; height: 38px; font-size: 15px; }
+  .workspace-copy b, .profile-copy b { font-size: 15px; }
+  .workspace-copy small, .profile-copy small { font-size: 12px; }
+  .workspace-caret { font-size: 20px; }
+  .add-connection { height: 49px; font-size: 15px; }
+  .search-box { height: 44px; margin-top: 17px; margin-bottom: 21px; padding-inline: 10px; }
+  .search-box input { font-size: 14px; }
+  .search-box kbd, kbd { font-size: 11px; }
+  .section-heading { padding-bottom: 10px; font-size: 11px; }
+  .count-pill { font-size: 11px; }
+  .host-row { min-height: 54px; gap: 12px; padding: 9px; }
+  .host-glyph { width: 36px; height: 36px; }
+  .host-row-copy b { font-size: 14px; }
+  .host-row-copy small { font-size: 12px; }
+  .side-empty { padding: 14px 10px; font-size: 12px; }
+  .local-secure { gap: 10px; padding: 12px 10px; }
+  .local-secure b { font-size: 13px; }
+  .local-secure small { font-size: 11px; }
+  .profile-row { gap: 10px; padding: 9px; }
+  .topbar { height: 72px; padding-inline: 44px; }
+  .breadcrumb { font-size: 12px; }
+  .local-badge, .help-button { font-size: 13px; }
+  .avatar-small { width: 36px; height: 36px; font-size: 13px; }
+  .page-content { max-width: 1760px; padding: 42px 48px 52px; }
+  .page-heading h1 { font-size: 38px; }
+  .page-heading p { font-size: 15px; line-height: 1.55; }
+  .eyebrow { font-size: 11px; }
+  .button { min-height: 46px; padding-inline: 16px; font-size: 14px; }
+  .route-tabs { height: 52px; gap: 29px; }
+  .route-tab { gap: 9px; font-size: 14px; }
+  .connection-indicator { font-size: 12px; }
+  .route-view { padding-top: 30px; }
+  .welcome-content { padding: 36px 40px; }
+  .welcome-content h2 { font-size: 39px; }
+  .welcome-content p { max-width: 460px; font-size: 15px; }
+  .welcome-kicker { font-size: 11px; }
+  .overview-stat-card { min-height: 106px; padding: 16px 18px; }
+  .stat-label { font-size: 11px; }
+  .stat-number { font-size: 30px; }
+  .stat-foot { font-size: 12px; }
+  .quick-tip { gap: 11px; padding: 12px 14px; }
+  .quick-tip b { font-size: 13px; }
+  .quick-tip p { font-size: 12px; line-height: 1.55; }
+  .section-title-row h2 { font-size: 21px; }
+  .section-title-row .eyebrow { font-size: 10px; }
+  .text-button { font-size: 13px; }
+  .server-card { padding: 18px; }
+  .server-card-name h3 { font-size: 17px; }
+  .server-address { font-size: 12px; }
+  .server-status { gap: 6px; font-size: 11px; }
+  .server-card-meta { gap: 8px; margin-block: 14px; font-size: 11px; }
+  .card-connect { min-height: 42px; font-size: 13px; }
+  .icon-square { min-height: 40px; }
+  .feature-item { padding: 16px 18px; }
+  .feature-item b { font-size: 13px; }
+  .feature-item small { font-size: 11px; }
+  .terminal-stage { min-height: 560px; padding: 16px 18px; }
+  .terminal-toolbar { min-height: 60px; padding-inline: 17px; }
+  .terminal-host-label { gap: 10px; font-size: 15px; }
+  .terminal-host-label small { font-size: 12px; }
+  .terminal-footer { height: 38px; font-size: 10px; }
+  .files-toolbar { min-height: 68px; padding-inline: 18px; }
+  .file-location, .file-name-button { font-size: 13px; }
+  .file-table th { height: 42px; padding-inline: 16px; font-size: 11px; }
+  .file-table td { height: 50px; padding-inline: 16px; font-size: 13px; }
+  .file-footer { padding-block: 12px; font-size: 10px; }
+  .inline-empty b { font-size: 14px; }
+  .inline-empty span, .inline-loading { font-size: 12px; }
+  .monitor-toolbar { min-height: 62px; padding-inline: 18px; }
+  .monitor-server-label { font-size: 13px; }
+  .metric-card { min-height: 250px; padding: 18px 20px 13px; }
+  .metric-top > span:first-child { font-size: 12px; }
+  .metric-reading b { font-size: 38px; }
+  .metric-sub, .metric-bottom { font-size: 12px; }
+  .monitor-note { font-size: 11px; }
+  .modal-card { width: min(100%, 560px); padding: 28px; border-radius: 15px; }
+  .modal-description { font-size: 14px; }
+  .form-field > span, .form-field label { font-size: 13px; }
+  .form-field input, .form-field select, .form-field textarea { min-height: 46px; font-size: 14px; }
+  .toast { min-width: 280px; max-width: 440px; padding: 13px 15px; font-size: 13px; }
+  .workspace-menu { top: 96px; padding: 10px; }
+  .workspace-menu-label { font-size: 11px; }
+  .workspace-option, .workspace-menu-actions button, .workspace-option b { font-size: 13px; }
+  .host-popover { min-width: 190px; padding: 7px; }
+  .host-popover button { padding: 10px; font-size: 12px; }
+  html[data-theme] .theme-picker > span { font-size: 10px; }
+  html[data-theme] .theme-picker select { width: 205px; height: 36px; font-size: 12px; }
+  .account-section h3 { font-size: 16px; }
+  .account-help, .account-message, .recovery-confirm { font-size: 14px; }
+  .account-form .form-field > span, .account-password-form .form-field > span, .security-reauth > span { font-size: 13px; }
+  .account-form .form-field input, .account-password-form .form-field input, .account-form > input, .security-reauth input { height: 46px; font-size: 14px; }
+}
+
 @media (min-width: 1100px) {
   .sidebar { width: 286px; flex-basis: 286px; padding: 27px 17px 16px; }
   .brand-mark { width: 35px; height: 35px; }
@@ -996,3 +1098,5 @@ html[data-theme] .text-button:hover { color: var(--accent-hover); }
   html[data-theme] .theme-picker select { width: 104px; height: 27px; padding-left: 6px; font-size: 9px; }
   html[data-theme] .topbar-actions { gap: 8px; }
 }
+
+/* Desktop type and controls stay comfortable at normal viewing distance. */

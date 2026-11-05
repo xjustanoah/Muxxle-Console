@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -95,10 +95,10 @@ function restrictWindowNavigation(window, baseUrl) {
 
 async function createAppWindow(baseUrl) {
   appWindow = new BrowserWindow({
-    width: 1680,
-    height: 1080,
-    minWidth: 1100,
-    minHeight: 720,
+    width: 1520,
+    height: 960,
+    minWidth: 1160,
+    minHeight: 740,
     backgroundColor: '#10131a',
     title: 'NexTerm Desk',
     autoHideMenuBar: true,
@@ -122,10 +122,11 @@ async function createAppWindow(baseUrl) {
 
 async function createLauncher() {
   launcherWindow = new BrowserWindow({
-    width: 760,
-    height: 690,
-    minWidth: 600,
-    minHeight: 600,
+    width: 1160,
+    height: 860,
+    minWidth: 900,
+    minHeight: 700,
+    useContentSize: true,
     resizable: true,
     backgroundColor: '#10131a',
     title: 'NexTerm Desk · Verbindung wählen',
