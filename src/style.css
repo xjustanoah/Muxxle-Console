@@ -517,3 +517,482 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
   .toast-stack { top: 60px; right: 10px; left: 10px; }
   .toast { min-width: 0; width: 100%; max-width: none; }
 }
+
+.workspace-switch { position: relative; }
+.workspace-menu { position: absolute; z-index: 20; top: 81px; left: 14px; right: 14px; padding: 8px; border: 1px solid #363b49; border-radius: 9px; background: #20242e; box-shadow: 0 15px 32px #07090e99; }
+.workspace-menu-label { padding: 5px 7px 8px; color: #838a9b; font: 10px 'DM Mono', monospace; letter-spacing: .1em; }
+.workspace-option { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px; border: 0; border-radius: 6px; color: #c9ccd6; background: transparent; text-align: left; cursor: pointer; }
+.workspace-option:hover, .workspace-option.active { background: #302b41; color: #e0d8ff; }
+.workspace-option b { color: #ac9be9; font-size: 10px; font-weight: 500; }
+.workspace-menu-actions { display: flex; gap: 5px; margin-top: 7px; padding-top: 7px; border-top: 1px solid #373b48; }
+.workspace-menu-actions button { flex: 1; padding: 7px 4px; border: 0; border-radius: 5px; color: #aeb3c2; background: transparent; font-size: 10px; cursor: pointer; }
+.workspace-menu-actions button:hover { background: #2d323e; color: #eeeef4; }
+.auth-reset-link { display: block; margin: 12px auto 0; padding: 4px; border: 0; color: #a897e6; background: transparent; font-size: 11px; cursor: pointer; }
+.auth-reset-link:hover { color: #d2c7ff; }
+.factor-passkey { width: 100%; margin-top: 11px; }
+.reset-layout { grid-template-columns: 1fr; }
+.account-modal { width: min(100%, 760px); max-height: min(86vh, 900px); display: flex; flex-direction: column; }
+.account-scroll { overflow: auto; padding-right: 4px; }
+.account-section { padding: 16px 0; border-bottom: 1px solid #2d323e; }
+.account-section:last-child { border-bottom: 0; }
+.account-section h3 { margin: 0 0 7px; color: #e2e3ec; font-size: 14px; font-weight: 650; }
+.account-help { margin: 0 0 12px; color: #9299a8; font-size: 12px; line-height: 1.55; }
+.account-form { display: flex; align-items: end; gap: 9px; }
+.account-form .form-field { min-width: 0; flex: 1; gap: 7px; }
+.account-form .form-field > span { color: #b9bfcc; font-size: 11px; }
+.account-form .form-field input { height: 42px; font-size: 13px; }
+.account-form > input { min-width: 0; flex: 1; height: 42px; padding: 0 12px; border: 1px solid #343947; border-radius: 7px; color: #e1e3ea; background: #11141b; font-size: 13px; }
+.account-password-form { align-items: stretch; flex-direction: column; }
+.account-password-form .form-field { gap: 7px; }
+.account-password-form .form-field > span { color: #b9bfcc; font-size: 11px; }
+.account-password-form .form-field input { height: 42px; font-size: 13px; }
+.security-reauth { max-width: 360px; margin: 8px 0 12px; gap: 7px; }
+.security-reauth > span { color: #b9bfcc; font-size: 11px; }
+.security-reauth input { height: 40px; font-size: 13px; }
+.account-password-form .button { align-self: flex-start; }
+.account-message { margin: 9px 0; padding: 9px 11px; border: 1px solid #573b42; border-radius: 6px; color: #ffb4af; background: #2a1c22; font-size: 12px; }
+.security-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.button-danger { color: #f1a2a0; border: 1px solid #69414a; background: #281d24; }
+.button-danger:hover { background: #39242c; }
+.otp-uri { display: inline-block; margin: 0 0 12px; color: #b8a7ff; font-size: 12px; }
+.otp-secret { margin-bottom: 14px; padding: 12px; border: 1px solid #383443; border-radius: 7px; color: #ded4ff; background: #171521; font: 14px 'DM Mono', monospace; letter-spacing: .1em; user-select: all; }
+.recovery-modal { width: min(100%, 660px); }
+.recovery-code-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 16px 0; }
+.recovery-code-grid code { padding: 10px; border: 1px solid #373442; border-radius: 6px; color: #e0d5ff; background: #171521; font: 13px 'DM Mono', monospace; text-align: center; user-select: all; }
+.recovery-confirm { display: flex; align-items: flex-start; gap: 9px; margin: 14px 0; color: #c2c5cf; font-size: 12px; line-height: 1.5; }
+.recovery-confirm input { margin-top: 2px; accent-color: #9a84eb; }
+.recovery-modal > .button { width: 100%; min-height: 42px; }
+.admin-reset-list { display: grid; gap: 9px; }
+.admin-reset-row { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid #303541; border-radius: 7px; background: #171a22; }
+.admin-reset-row > div { min-width: 0; display: grid; gap: 4px; }
+.admin-reset-row b { overflow: hidden; color: #d4d6df; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-reset-row b small { color: #999eac; font-weight: 400; }
+.admin-reset-row span { overflow: hidden; color: #818898; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-reset-row input { min-width: 0; height: 36px; padding: 0 8px; border: 1px solid #343947; border-radius: 6px; color: #e1e3ea; background: #11141b; font-size: 10px; }
+
+@media (min-width: 1100px) {
+  .sidebar { width: 286px; flex-basis: 286px; padding: 27px 17px 16px; }
+  .brand-mark { width: 35px; height: 35px; }
+  .brand-name { font-size: 16px; }
+  .workspace-switch { min-height: 60px; padding: 9px; gap: 11px; }
+  .workspace-avatar, .profile-avatar, .avatar-small { width: 34px; height: 34px; font-size: 14px; }
+  .workspace-copy b, .profile-copy b { font-size: 13px; }
+  .workspace-copy small, .profile-copy small { font-size: 11px; }
+  .add-connection { height: 43px; font-size: 13px; }
+  .search-box { height: 39px; }
+  .search-box input { font-size: 13px; }
+  .section-heading { font-size: 10px; }
+  .host-row { gap: 11px; padding: 9px; }
+  .host-glyph { width: 32px; height: 32px; }
+  .host-row-copy b { font-size: 13px; }
+  .host-row-copy small { font-size: 10px; }
+  .local-secure b { font-size: 12px; }
+  .local-secure small { font-size: 10px; }
+  .topbar { height: 66px; padding: 0 40px; }
+  .breadcrumb { font-size: 10px; }
+  .local-badge, .help-button { font-size: 12px; }
+  .page-content { max-width: 1700px; padding: 37px 42px 48px; }
+  .page-heading h1 { font-size: 34px; }
+  .page-heading p { font-size: 14px; }
+  .eyebrow { font-size: 10px; }
+  .button { min-height: 40px; padding-inline: 14px; font-size: 12px; }
+  .route-tabs { height: 46px; gap: 26px; }
+  .route-tab { font-size: 12px; }
+  .connection-indicator { font-size: 11px; }
+  .route-view { padding-top: 25px; }
+  .welcome-content { padding: 31px 34px; }
+  .welcome-content h2 { font-size: 34px; }
+  .welcome-content p { font-size: 13px; }
+  .welcome-kicker { font-size: 10px; }
+  .overview-stat-card { min-height: 94px; padding: 14px 16px; }
+  .stat-label { font-size: 9px; }
+  .stat-foot { font-size: 10px; }
+  .quick-tip b { font-size: 11px; }
+  .quick-tip p { font-size: 10px; }
+  .section-title-row h2 { font-size: 18px; }
+  .section-title-row .eyebrow { font-size: 9px; }
+  .text-button { font-size: 11px; }
+  .server-card { padding: 16px; }
+  .server-card-name h3 { font-size: 14px; }
+  .server-address { font-size: 10px; }
+  .server-card-meta { font-size: 9px; }
+  .card-connect { min-height: 35px; font-size: 11px; }
+  .feature-item { padding: 14px 17px; }
+  .feature-item b { font-size: 11px; }
+  .feature-item small { font-size: 10px; }
+  .terminal-stage { min-height: 520px; }
+  .terminal-toolbar { min-height: 54px; }
+  .terminal-host-label { font-size: 13px; }
+  .terminal-host-label small { font-size: 11px; }
+  .files-toolbar { min-height: 60px; }
+  .file-table th, .file-table td { font-size: 12px; }
+  .metric-card { min-height: 236px; }
+  .metric-top > span:first-child { font-size: 10px; }
+  .metric-reading b { font-size: 32px; }
+  .metric-sub, .metric-bottom { font-size: 11px; }
+  .auth-layout { grid-template-columns: minmax(440px, .88fr) minmax(560px, 1.12fr); }
+  .auth-aside { padding: 48px 7%; }
+  .auth-brand { font-size: 18px; }
+  .auth-pitch h1 { font-size: clamp(54px, 4vw, 72px); }
+  .auth-pitch > p { max-width: 560px; font-size: 16px; }
+  .auth-feature-list b { font-size: 14px; }
+  .auth-feature-list small { font-size: 12px; }
+  .auth-card { width: min(100%, 540px); padding: 40px; }
+  .auth-card-kicker { font-size: 10px; }
+  .auth-card h2 { font-size: 30px; }
+  .auth-card-intro { font-size: 14px; }
+  .auth-card .form-field > span { font-size: 12px; }
+  .auth-card .form-field input { height: 50px; font-size: 14px; }
+  .auth-submit { min-height: 48px; font-size: 14px; }
+  .auth-switch { font-size: 12px; }
+  .auth-card-security { font-size: 11px; }
+  .auth-main-foot { font-size: 10px; }
+}
+
+@media (max-width: 720px) {
+  .admin-reset-row { grid-template-columns: 1fr; }
+  .recovery-code-grid { grid-template-columns: 1fr; }
+  .account-form { align-items: stretch; flex-direction: column; }
+}
+
+/* Account themes: Material surfaces, restrained outlines, and no color glow. */
+html[data-theme="material-dark"] {
+  color-scheme: dark;
+  --bg: #141218;
+  --sidebar: #1c1b1f;
+  --surface: #1c1b1f;
+  --surface-1: #211f26;
+  --surface-2: #2b2930;
+  --surface-3: #38363d;
+  --outline: #49454f;
+  --text: #e6e1e5;
+  --muted: #cac4d0;
+  --dim: #938f99;
+  --accent: #d0bcff;
+  --accent-hover: #eaddff;
+  --accent-container: #4f378b;
+  --accent-contrast: #381e72;
+  --success: #b7e4c7;
+  --danger: #f2b8b5;
+  --focus: #d0bcff;
+}
+
+html[data-theme="material-white"] {
+  color-scheme: light;
+  --bg: #f7f2fa;
+  --sidebar: #f3edf7;
+  --surface: #fffbff;
+  --surface-1: #f3edf7;
+  --surface-2: #ece6f0;
+  --surface-3: #e6e0e9;
+  --outline: #79747e;
+  --text: #1c1b1f;
+  --muted: #49454f;
+  --dim: #625b71;
+  --accent: #6750a4;
+  --accent-hover: #7e67ad;
+  --accent-container: #eaddff;
+  --accent-contrast: #ffffff;
+  --success: #386a4a;
+  --danger: #b3261e;
+  --focus: #6750a4;
+}
+
+html[data-theme="muxxle"] {
+  color-scheme: dark;
+  --bg: #140b0c;
+  --sidebar: #201314;
+  --surface: #201314;
+  --surface-1: #28191a;
+  --surface-2: #382224;
+  --surface-3: #493032;
+  --outline: #65484a;
+  --text: #f2dfe0;
+  --muted: #d2bfc0;
+  --dim: #a68f90;
+  --accent: #ffb4ab;
+  --accent-hover: #ffd9d4;
+  --accent-container: #93000a;
+  --accent-contrast: #3f0000;
+  --success: #b8d7bf;
+  --danger: #ffb4ab;
+  --focus: #ffb4ab;
+}
+
+html[data-theme] { color: var(--text); background: var(--bg); }
+html[data-theme] body,
+html[data-theme] .app-shell { color: var(--text); background: var(--bg); }
+html[data-theme] .sidebar { background: var(--sidebar); border-color: var(--outline); }
+html[data-theme] .topbar,
+html[data-theme] .workspace-switch,
+html[data-theme] .search-box,
+html[data-theme] .terminal-toolbar,
+html[data-theme] .terminal-footer,
+html[data-theme] .files-toolbar,
+html[data-theme] .file-table-wrap,
+html[data-theme] .monitor-toolbar,
+html[data-theme] .quick-tip,
+html[data-theme] .overview-stat-card,
+html[data-theme] .feature-strip,
+html[data-theme] .server-card,
+html[data-theme] .metric-card,
+html[data-theme] .admin-reset-row,
+html[data-theme] .upload-progress,
+html[data-theme] .auth-card,
+html[data-theme] .workspace-menu,
+html[data-theme] .host-popover,
+html[data-theme] .modal-card { background: var(--surface); border-color: var(--outline); box-shadow: none; }
+html[data-theme] .welcome-card,
+html[data-theme] .empty-server-card,
+html[data-theme] .monitor-empty { background: var(--surface-1); border-color: var(--outline); }
+html[data-theme] .welcome-card::before { display: none; }
+html[data-theme] .art-core,
+html[data-theme] .art-node,
+html[data-theme] .server-card-avatar,
+html[data-theme] .host-glyph,
+html[data-theme] .empty-terminal-icon,
+html[data-theme] .empty-monitor-icon,
+html[data-theme] .tip-icon,
+html[data-theme] .feature-icon,
+html[data-theme] .metric-icon,
+html[data-theme] .file-icon,
+html[data-theme] .auth-method-icon,
+html[data-theme] .upload-progress-icon { color: var(--accent); background: var(--surface-2); border-color: var(--outline); box-shadow: none; }
+html[data-theme] .button-primary { color: var(--accent-contrast); background: var(--accent); border-color: var(--accent); box-shadow: none; }
+html[data-theme] .button-primary:hover { color: var(--accent-contrast); background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: none; }
+html[data-theme] .button-primary:disabled { opacity: .55; }
+html[data-theme] .button-secondary,
+html[data-theme] .icon-square,
+html[data-theme] .logout-button { color: var(--text); background: var(--surface-1); border-color: var(--outline); }
+html[data-theme] .button-secondary:hover,
+html[data-theme] .icon-button:hover,
+html[data-theme] .icon-square:hover,
+html[data-theme] .logout-button:hover { color: var(--text); background: var(--surface-2); border-color: var(--outline); }
+html[data-theme] .add-connection { color: var(--accent); background: var(--surface-2); border-color: var(--outline); }
+html[data-theme] .add-connection:hover { color: var(--text); background: var(--surface-3); border-color: var(--outline); }
+html[data-theme] .host-row.selected,
+html[data-theme] .workspace-option:hover,
+html[data-theme] .workspace-option.active { color: var(--accent); background: var(--surface-2); border-color: var(--outline); }
+html[data-theme] .workspace-option,
+html[data-theme] .workspace-menu-actions button,
+html[data-theme] .host-popover button { color: var(--text); }
+html[data-theme] .host-row:hover,
+html[data-theme] .workspace-menu-actions button:hover,
+html[data-theme] .host-popover button:hover,
+html[data-theme] .file-table tbody tr:not(.parent-row):hover { color: var(--text); background: var(--surface-2); }
+html[data-theme] .local-secure { background: var(--surface-1); border-color: var(--outline); }
+html[data-theme] .local-secure b,
+html[data-theme] .local-secure small { color: var(--muted); }
+html[data-theme] .local-secure svg,
+html[data-theme] .local-secure i { color: var(--success); background-color: var(--success); box-shadow: none; }
+html[data-theme] .brand-mark,
+html[data-theme] .workspace-avatar,
+html[data-theme] .profile-avatar,
+html[data-theme] .avatar-small { color: var(--accent-contrast); background: var(--accent); border-color: var(--accent); box-shadow: none; }
+html[data-theme] .brand-name,
+html[data-theme] .page-heading h1,
+html[data-theme] .welcome-content h2,
+html[data-theme] .stat-number,
+html[data-theme] .section-title-row h2,
+html[data-theme] .server-card-name h3,
+html[data-theme] .terminal-host-label,
+html[data-theme] .terminal-empty h3,
+html[data-theme] .monitor-empty h3,
+html[data-theme] .metric-reading b,
+html[data-theme] .network-readings b,
+html[data-theme] .auth-card h2,
+html[data-theme] .auth-pitch h1,
+html[data-theme] .auth-feature-list b,
+html[data-theme] .empty-server-card b,
+html[data-theme] .admin-reset-row b { color: var(--text); }
+html[data-theme] .brand-name span,
+html[data-theme] .breadcrumb,
+html[data-theme] .section-heading,
+html[data-theme] .workspace-copy small,
+html[data-theme] .profile-copy small,
+html[data-theme] .host-row-copy small,
+html[data-theme] .stat-label,
+html[data-theme] .stat-foot,
+html[data-theme] .server-status,
+html[data-theme] .server-address,
+html[data-theme] .server-card-meta,
+html[data-theme] .feature-item small,
+html[data-theme] .metric-top,
+html[data-theme] .metric-sub,
+html[data-theme] .metric-bottom,
+html[data-theme] .monitor-refresh,
+html[data-theme] .monitor-server-label span:last-child,
+html[data-theme] .file-footer,
+html[data-theme] .file-table th,
+html[data-theme] .file-table td,
+html[data-theme] .auth-card-intro,
+html[data-theme] .auth-feature-list small,
+html[data-theme] .auth-main-foot,
+html[data-theme] .page-heading p,
+html[data-theme] .quick-tip p,
+html[data-theme] .empty-server-card span,
+html[data-theme] .terminal-empty p,
+html[data-theme] .monitor-empty p { color: var(--dim); }
+html[data-theme] .eyebrow,
+html[data-theme] .welcome-content h2 em,
+html[data-theme] .welcome-spark,
+html[data-theme] .welcome-kicker,
+html[data-theme] .text-button,
+html[data-theme] .route-tab.active,
+html[data-theme] .file-location > svg,
+html[data-theme] .file-name-button:hover,
+html[data-theme] .auth-card-kicker,
+html[data-theme] .auth-switch button { color: var(--accent); }
+html[data-theme] .route-tabs,
+html[data-theme] .profile-row,
+html[data-theme] .server-card-bottom,
+html[data-theme] .metric-bottom,
+html[data-theme] .workspace-menu-actions,
+html[data-theme] .auth-card-security { border-color: var(--outline); }
+html[data-theme] .route-tab { color: var(--dim); }
+html[data-theme] .route-tab.active::after { background: var(--accent); }
+html[data-theme] .search-box input,
+html[data-theme] .form-field input,
+html[data-theme] .account-form > input,
+html[data-theme] .admin-reset-row input,
+html[data-theme] .theme-picker select { color: var(--text); background: var(--surface-1); border-color: var(--outline); }
+html[data-theme] .form-field > span,
+html[data-theme] .account-form .form-field > span,
+html[data-theme] .account-password-form .form-field > span { color: var(--muted); }
+html[data-theme] .form-field input::placeholder,
+html[data-theme] .search-box input::placeholder { color: var(--dim); }
+html[data-theme] .form-field input:focus,
+html[data-theme] .theme-picker select:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 20%, transparent); }
+html[data-theme] .theme-picker { display: flex; align-items: center; gap: 7px; }
+html[data-theme] .theme-picker > span { color: var(--dim); font: 500 8px 'DM Mono', monospace; letter-spacing: .1em; }
+html[data-theme] .theme-picker select { width: 182px; height: 30px; padding: 0 20px 0 9px; border: 1px solid var(--outline); border-radius: 6px; font: 500 10px 'DM Sans', sans-serif; cursor: pointer; }
+html[data-theme] .topbar-actions { gap: 14px; }
+html[data-theme] .local-badge { color: var(--muted); }
+html[data-theme] .local-badge span,
+html[data-theme] .connection-indicator.connected span,
+html[data-theme] .status-dot,
+html[data-theme] .green-led { background: var(--success); box-shadow: none; }
+html[data-theme] .connection-indicator.connected { color: var(--success); }
+html[data-theme] .connection-indicator,
+html[data-theme] .help-button,
+html[data-theme] .terminal-type,
+html[data-theme] .terminal-host-label small,
+html[data-theme] .terminal-footer,
+html[data-theme] .file-location,
+html[data-theme] .file-location > span:first-of-type,
+html[data-theme] .file-location code,
+html[data-theme] .file-name-button,
+html[data-theme] .inline-empty,
+html[data-theme] .inline-empty b,
+html[data-theme] .inline-empty span,
+html[data-theme] .network-direction,
+html[data-theme] .monitor-note,
+html[data-theme] .auth-card-security,
+html[data-theme] .workspace-menu-label { color: var(--muted); }
+html[data-theme] .welcome-content p,
+html[data-theme] .quick-tip b,
+html[data-theme] .feature-item b,
+html[data-theme] .metric-reading span { color: var(--muted); }
+html[data-theme] .auth-layout,
+html[data-theme] .auth-main { background: var(--bg); }
+html[data-theme] .auth-aside { background: var(--sidebar); border-color: var(--outline); }
+html[data-theme] .auth-aside::before { display: none; }
+html[data-theme] .auth-brand,
+html[data-theme] .auth-mobile-brand { color: var(--text); }
+html[data-theme] .auth-brand small,
+html[data-theme] .auth-mobile-brand small,
+html[data-theme] .auth-aside-bottom { color: var(--dim); }
+html[data-theme] .auth-pitch h1 em,
+html[data-theme] .auth-feature-list > div > svg { color: var(--accent); }
+html[data-theme] .auth-local-tag { color: var(--muted); }
+html[data-theme] .auth-local-tag i { background: var(--success); box-shadow: none; }
+html[data-theme] .auth-pitch > p,
+html[data-theme] .trust-note { color: var(--dim); }
+html[data-theme] .trust-note svg { color: var(--success); }
+html[data-theme] .auth-submit { color: var(--accent-contrast); }
+html[data-theme] .auth-switch { color: var(--dim); }
+html[data-theme] .auth-card-security { border-color: var(--outline); }
+html[data-theme] .file-table th,
+html[data-theme] .file-table td { border-color: var(--outline); }
+html[data-theme] .toast,
+html[data-theme] .toast.error,
+html[data-theme] .auth-security,
+html[data-theme] .recovery-code-grid code,
+html[data-theme] .admin-reset-row { color: var(--text); background: var(--surface-1); border-color: var(--outline); }
+html[data-theme] .modal-backdrop { background: color-mix(in srgb, var(--bg) 72%, transparent); }
+html[data-theme] .metric-progress { background: var(--surface-3); }
+html[data-theme] .feature-item + .feature-item { border-color: var(--outline); }
+html[data-theme] .art-node b,
+html[data-theme] .server-card-status,
+html[data-theme] .count-pill,
+html[data-theme] kbd { color: var(--muted); background: var(--surface-2); border-color: var(--outline); }
+html[data-theme] .orbit { border-color: color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-theme] .art-dots { display: none; }
+html[data-theme] .terminal-stage { background: var(--bg); border-color: var(--outline); }
+html[data-theme] .modal-top h2,
+html[data-theme] .account-section h3,
+html[data-theme] .auth-host b { color: var(--text); }
+html[data-theme] .account-message { color: var(--danger); background: var(--surface-1); border-color: var(--danger); }
+html[data-theme] .modal-description,
+html[data-theme] .account-help,
+html[data-theme] .auth-host small,
+html[data-theme] .key-file-row > span,
+html[data-theme] .auth-method small,
+html[data-theme] .reveal-password { color: var(--dim); }
+html[data-theme] .auth-host,
+html[data-theme] .auth-method,
+html[data-theme] .secure-inline,
+html[data-theme] .auth-security,
+html[data-theme] .otp-secret,
+html[data-theme] .recovery-code-grid code { background: var(--surface-1); border-color: var(--outline); color: var(--muted); }
+html[data-theme] .auth-method.active { background: var(--accent-container); border-color: var(--accent); box-shadow: none; }
+html[data-theme] .auth-method b { color: var(--text); }
+html[data-theme] .auth-method.active .auth-method-icon { color: var(--accent); background: var(--surface-2); }
+html[data-theme] .auth-method.active > i { border-color: var(--accent); background: var(--accent); box-shadow: none; }
+html[data-theme] .auth-lock,
+html[data-theme] .auth-security svg,
+html[data-theme] .auth-card-security svg,
+html[data-theme] .monitor-note > svg { color: var(--success); }
+html[data-theme] .auth-host-icon { color: var(--accent); background: var(--surface-2); }
+html[data-theme] .file-icon,
+html[data-theme] .file-icon.file,
+html[data-theme] .file-icon.parent-icon { color: var(--accent); background: var(--surface-2); }
+html[data-theme] .metric-icon.purple,
+html[data-theme] .metric-icon.blue,
+html[data-theme] .metric-icon.amber,
+html[data-theme] .metric-icon.green,
+html[data-theme] .feature-icon.purple,
+html[data-theme] .feature-icon.blue,
+html[data-theme] .feature-icon.green { color: var(--accent); background: var(--surface-2); }
+html[data-theme] .feature-item b,
+html[data-theme] .quick-tip b,
+html[data-theme] .empty-server-card b,
+html[data-theme] .workspace-copy b,
+html[data-theme] .profile-copy b,
+html[data-theme] .admin-reset-row b small { color: var(--text); }
+html[data-theme] .admin-reset-row > div span,
+html[data-theme] .admin-reset-row b small,
+html[data-theme] .workspace-copy small,
+html[data-theme] .profile-copy small { color: var(--dim); }
+html[data-theme] .metric-progress span.blue,
+html[data-theme] .metric-progress span.amber { background: var(--accent); }
+html[data-theme] .toast,
+html[data-theme] .toast.error { color: var(--text); background: var(--surface-1); border-color: var(--outline); box-shadow: none; }
+html[data-theme] .toast-icon,
+html[data-theme] .toast.error .toast-icon { color: var(--accent); background: var(--surface-2); }
+html[data-theme] .modal-error,
+html[data-theme] .auth-form-error { color: var(--danger); background: var(--surface-1); border-color: var(--danger); }
+html[data-theme] .connection-lost,
+html[data-theme] .connection-lost + small,
+html[data-theme] .host-popover .delete-action,
+html[data-theme] .danger-hover:hover { color: var(--danger) !important; }
+html[data-theme] .recovery-confirm { color: var(--muted); }
+html[data-theme] .recovery-confirm input { accent-color: var(--accent); }
+html[data-theme] .auth-switch button:hover,
+html[data-theme] .text-button:hover { color: var(--accent-hover); }
+
+@media (max-width: 560px) {
+  html[data-theme] .theme-picker > span { display: none; }
+  html[data-theme] .theme-picker select { width: 104px; height: 27px; padding-left: 6px; font-size: 9px; }
+  html[data-theme] .topbar-actions { gap: 8px; }
+}

@@ -29,7 +29,7 @@ npm install
 npm run dist:win
 ```
 
-Der Installer liegt anschließend unter `release/NexTerm-Desk-0.1.0-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
+Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.1-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
 
 - **Lokaler Tresor:** Die Desktop-App legt den Datenspeicher im NexTerm-App-Profil ab und verschlüsselt Konten und Serverprofile mit AES-256-GCM. Der zufällige Datenschlüssel wird über Windows DPAPI geschützt. Vorhandene Kontodaten aus `~/.nexterm` werden in den Tresor kopiert.
 - **Webserver:** Gib die HTTPS-Adresse deiner NexTerm-Instanz ein und melde dich dort mit dem Konto dieser Instanz an. Nur die Serveradresse wird für den nächsten Start gemerkt. Passwörter und private SSH-Schlüssel werden nicht in der Desktop-Konfiguration gespeichert.
@@ -37,6 +37,16 @@ Der Installer liegt anschließend unter `release/NexTerm-Desk-0.1.0-Setup.exe`. 
 Für Webserver sind HTTPS und WebSocket-Weiterleitung erforderlich. Wenn TLS an einem Reverse Proxy endet, starte NexTerm dahinter mit `TRUST_PROXY=1`, leite den ursprünglichen Host und das HTTPS-Schema korrekt weiter und aktiviere den WebSocket-Upgrade für `/terminal`. HTTP ist in der Desktop-App nur für `localhost` erlaubt.
 
 Für gespeicherte Konten auf einem selbst betriebenen Webserver kannst du zusätzlich einen festen 32-Byte-Schlüssel konfigurieren: einmalig mit `openssl rand -hex 32` erzeugen, sicher als `NEXTERM_DATA_KEY` im Dienst hinterlegen und bei jedem Start denselben Wert verwenden. Zusammen mit `TRUST_PROXY=1` werden Konten und Serverprofile serverseitig verschlüsselt. Geht dieser Schlüssel verloren, lässt sich der Datenbestand nicht mehr entschlüsseln.
+
+## Konten, Workspaces und Anmeldung
+
+Neue Konten benötigen einen Anzeigenamen, Benutzernamen, eine E-Mail-Adresse und ein Passwort. Vorhandene Konten werden beim ersten Zugriff auf ein persönliches Workspace-Format migriert; gespeicherte Serverprofile bleiben dabei erhalten. Der erste Account wird Admin. Auf bestehenden Installationen wird der bisher erste Account zum Admin migriert, sofern `NEXTERM_ADMIN_USERNAME` nicht auf einen anderen Benutzernamen gesetzt ist. Admins können ausschließlich temporäre Passwörter für andere Konten setzen; betroffene Nutzer müssen dieses Passwort nach der Anmeldung ändern.
+
+Passwortänderungen sind in den Kontoeinstellungen verfügbar. E-Mail-Passwort-Resets bleiben standardmäßig aus. Für den Versand müssen `NEXTERM_PASSWORD_RESET_ENABLED=1`, `SMTP_HOST` und `SMTP_FROM` gesetzt werden. Optional sind `SMTP_PORT` (Standard `587`), `SMTP_SECURE=1` für implizites TLS sowie `SMTP_USER` und `SMTP_PASS`. Reset-Links laufen nach 30 Minuten ab.
+
+OTP und Passkeys sind pro Konto optional und werden in den Kontoeinstellungen aktiviert. Vor dem Aktivieren muss der Nutzer die einmalig angezeigten Wiederherstellungscodes bestätigen. Passkeys benötigen HTTPS; die lokale Desktop-App kann sie auf `localhost` verwenden. Wenn die Instanz hinter einem Proxy läuft, muss NexTerm mit `TRUST_PROXY=1` gestartet werden. Optional lassen sich `NEXTERM_WEBAUTHN_RP_ID` und `NEXTERM_WEBAUTHN_ORIGIN` explizit setzen.
+
+Jeder Account kann mehrere Workspaces anlegen und zwischen ihnen wechseln. Serverprofile und SSH-Sitzungen sind an den jeweils aktiven Workspace gebunden. Diese Workspaces liegen für Web- und Desktop-Clients gemeinsam im NexTerm-Konto.
 
 ## Funktionen
 
@@ -46,6 +56,10 @@ Für gespeicherte Konten auf einem selbst betriebenen Webserver kannst du zusät
 - Live-Anzeigen für CPU, RAM, Root-Dateisystem und Netzwerkdurchsatz
 - Serverprofile und bestätigte SSH-Host-Fingerabdrücke
 - Lokale Benutzerkonten mit getrennten Serverlisten
+- E-Mail-Adresse am Konto, Passwortänderung und optionaler SMTP-Passwortreset
+- Workspaces mit getrennten Serverprofilen
+- Optionales OTP und Passkeys mit bestätigungspflichtigen Wiederherstellungscodes
+- Admin-Rolle zum Zurücksetzen fremder Kontopasswörter
 - Anmeldung an einzelnen Servern per Passwort oder SSH-Schlüssel
 
 Monitoring liest Linux-Werte aus `/proc` und verwendet `df` für das Root-Dateisystem. Es setzt daher ein Linux-Zielsystem voraus. Terminal und SFTP laufen auf dem jeweiligen SSH-Server.
@@ -54,6 +68,6 @@ Monitoring liest Linux-Werte aus `/proc` und verwendet `df` für das Root-Dateis
 
 Der lokale Webdienst bindet standardmäßig an `127.0.0.1`. Benutzerkonten und die jeweils eigenen Serverprofile werden im Browsermodus in `~/.nexterm/users.json` gespeichert. Die Windows-Desktop-App verwendet einen separaten, mit AES-256-GCM verschlüsselten Tresor. Kontopasswörter werden mit individuellem Salt und scrypt abgeleitet; SSH-Passwörter und private Schlüssel werden nur zum Verbindungsaufbau verwendet und nicht gespeichert. Anmeldesitzungen liegen im Arbeitsspeicher und enden nach zwölf Stunden oder beim Abmelden. Serverprofile aus älteren lokalen Dateien werden in den Tresor kopiert. Bei der ersten Serververbindung wird der SSH-Fingerabdruck angezeigt; bei einer Änderung muss der neue Fingerabdruck bewusst bestätigt werden.
 
-Die Konten sind lokale App-Konten auf diesem Gerät; es gibt noch keine Cloud-Synchronisierung, E-Mail-Verifizierung oder zentrale Nutzerverwaltung. Wer Zugriff auf dasselbe Windows-Konto und den lokalen Dienst hat, kann ein lokales NexTerm-Konto anlegen.
+Lokale App-Konten bleiben im verschlüsselten Tresor dieses Geräts. Webserver-Konten und ihre Workspaces werden auf der NexTerm-Instanz gespeichert. E-Mail-Adressen werden bei der Registrierung nicht verifiziert; aktiviere E-Mail-Resets erst, wenn der SMTP-Versand eingerichtet ist.
 
 Die Anwendung enthält noch keine Auto-Updates, Team-Synchronisierung, Agent-Weiterleitung oder Unterstützung für Windows/FreeBSD-Servermonitoring.

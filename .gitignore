@@ -1,7 +1,49 @@
+# Dependencies and generated build output
 node_modules/
 release/
-*.log
+out/
+coverage/
+.nyc_output/
+.vite/
+.electron-builder/
+# dist/ remains versioned because the Pelican Node service serves the built frontend directly.
+
+# Environment files and local secrets
 .env
 .env.*
 !.env.example
+!.env.*.example
+.secrets/
+secrets/
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Local NexTerm data and databases
 .nexterm/
+.nexterm-data/
+/data/
+users.json
+hosts.json
+sessions.json
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs, temporary files, and OS/editor metadata
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

@@ -7,6 +7,13 @@ import http from 'node:http';
 import express from 'express';
 import { Client } from 'ssh2';
 import { WebSocketServer, WebSocket } from 'ws';
+import nodemailer from 'nodemailer';
+import {
+  generateAuthenticationOptions,
+  generateRegistrationOptions,
+  verifyAuthenticationResponse,
+  verifyRegistrationResponse
+} from '@simplewebauthn/server';
 
 const DEFAULT_PORT = Number(process.env.PORT || 4783);
 const DEFAULT_HOST = process.env.HOST || '127.0.0.1';
@@ -21,10 +28,13 @@ const wss = new WebSocketServer({ noServer: true });
 const sessions = new Map();
 const loginSessions = new Map();
 const loginAttempts = new Map();
+const loginChallenges = new Map();
+const webAuthnChallenges = new Map();
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const STORE_FORMAT = 'nexterm-encrypted-json';
+const ACCOUNT_THEMES = new Set(['material-dark', 'material-white', 'muxxle']);
 let activeHost = DEFAULT_HOST;
 let activePort = DEFAULT_PORT;
 let serverStarted = false;
@@ -80,7 +90,50 @@ async function readData() {
   try {
     const content = await fs.readFile(USERS_FILE, 'utf8');
     const parsed = decodeStoredJson(content);
-    return parsed && Array.isArray(parsed.users) ? parsed : { users: [] };
+    const data = parsed && Array.isArray(parsed.users) ? parsed : { users: [] };
+    let changed = false;
+    const configuredAdmin = String(process.env.NEXTERM_ADMIN_USERNAME || '').trim().toLowerCase();
+    for (let index = 0; index < data.users.length; index++) {
+      const user = data.users[index];
+      if (!Array.isArray(user.workspaces)) {
+        const hosts = Array.isArray(user.hosts) ? user.hosts : [];
+        user.workspaces = [{ id: crypto.randomUUID(), name: 'Mein Workspace', hosts }];
+        user.activeWorkspaceId = user.workspaces[0].id;
+        delete user.hosts;
+        changed = true;
+      }
+      if (!user.workspaces.length) {
+        user.workspaces.push({ id: crypto.randomUUID(), name: 'Mein Workspace', hosts: [] });
+        changed = true;
+      }
+      for (const workspace of user.workspaces) {
+        workspace.hosts = Array.isArray(workspace.hosts) ? workspace.hosts : [];
+        workspace.id ||= crypto.randomUUID();
+        workspace.name ||= 'Workspace';
+      }
+      if (!user.workspaces.some(workspace => workspace.id === user.activeWorkspaceId)) {
+        user.activeWorkspaceId = user.workspaces[0].id;
+        changed = true;
+      }
+      if (!user.role && ((configuredAdmin && user.username === configuredAdmin) || (!configuredAdmin && index === 0))) {
+        user.role = 'admin';
+        changed = true;
+      }
+      user.role ||= 'user';
+      user.email ||= '';
+      if (!ACCOUNT_THEMES.has(user.theme)) {
+        user.theme = 'material-dark';
+        changed = true;
+      }
+      user.passkeys ||= [];
+      user.recoveryCodes ||= [];
+    }
+    if (configuredAdmin && data.users.length && !data.users.some(user => user.username === configuredAdmin) && !data.users.some(user => user.role === 'admin')) {
+      data.users[0].role = 'admin';
+      changed = true;
+    }
+    if (changed) await writeData(data);
+    return data;
   } catch (error) {
     if (error.code === 'ENOENT') return { users: [] };
     throw error;
@@ -97,8 +150,31 @@ function derivePassword(password, salt) {
   });
 }
 
+async function verifyAccountPassword(user, password) {
+  const value = String(password || '');
+  if (!value || value.length > 256) return false;
+  const candidate = await derivePassword(value, Buffer.from(user.passwordSalt, 'hex'));
+  const stored = Buffer.from(user.passwordHash, 'hex');
+  return stored.length === candidate.length && crypto.timingSafeEqual(stored, candidate);
+}
+
 function publicUser(user) {
-  return { id: user.id, username: user.username, name: user.name };
+  return { id: user.id, username: user.username, name: user.name, email: user.email || '', role: user.role || 'user', mustChangePassword: Boolean(user.mustChangePassword), theme: ACCOUNT_THEMES.has(user.theme) ? user.theme : 'material-dark' };
+}
+
+function activeWorkspace(user) {
+  user.workspaces ||= [{ id: crypto.randomUUID(), name: 'Mein Workspace', hosts: [] }];
+  user.activeWorkspaceId ||= user.workspaces[0].id;
+  return user.workspaces.find(workspace => workspace.id === user.activeWorkspaceId) || user.workspaces[0];
+}
+
+function setCookie(req, res, name, value, maxAge) {
+  const secure = req.secure ? '; Secure' : '';
+  res.append('Set-Cookie', `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure}`);
+}
+
+function clearCookie(res, name) {
+  res.append('Set-Cookie', `${name}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
 }
 
 function parseCookies(cookieHeader = '') {
@@ -114,8 +190,7 @@ function parseCookies(cookieHeader = '') {
 function issueLoginSession(req, res, user) {
   const token = crypto.randomBytes(32).toString('base64url');
   loginSessions.set(token, { userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS });
-  const secure = req.secure ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `nexterm_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}${secure}`);
+  setCookie(req, res, 'nexterm_session', token, Math.floor(SESSION_TTL_MS / 1000));
   return publicUser(user);
 }
 
@@ -140,7 +215,7 @@ async function requireAuth(req, res, next) {
   if (!session || session.expiresAt <= Date.now()) {
     if (token) loginSessions.delete(token);
     if (session) closeUserSshSessionsIfLoggedOut(session.userId);
-    res.setHeader('Set-Cookie', 'nexterm_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+    clearCookie(res, 'nexterm_session');
     return res.status(401).json({ error: 'Bitte melde dich erneut an.' });
   }
   try {
@@ -161,13 +236,18 @@ async function requireAuth(req, res, next) {
   }
 }
 
+function closeSshSession(sshSession) {
+  sessions.delete(sshSession.id);
+  sshSession.closed = true;
+  sshSession.client.end();
+}
+
 function closeUserSshSessions(userId) {
-  for (const sshSession of sessions.values()) {
-    if (sshSession.userId !== userId) continue;
-    sessions.delete(sshSession.id);
-    sshSession.closed = true;
-    sshSession.client.end();
-  }
+  for (const sshSession of sessions.values()) if (sshSession.userId === userId) closeSshSession(sshSession);
+}
+
+function closeUserSshSessionsExcept(userId, loginToken) {
+  for (const sshSession of sessions.values()) if (sshSession.userId === userId && sshSession.loginToken !== loginToken) closeSshSession(sshSession);
 }
 
 function closeUserSshSessionsIfLoggedOut(userId) {
@@ -237,9 +317,9 @@ function publicHost(host) {
   return { id, name, host: address, port, username, fingerprint: fingerprint || null };
 }
 
-function getSession(id, res, userId) {
+function getSession(id, res, userId, workspaceId, loginToken) {
   const session = sessions.get(id);
-  if (!session || session.closed || session.userId !== userId) {
+  if (!session || session.closed || session.userId !== userId || (workspaceId && session.workspaceId !== workspaceId) || (loginToken && session.loginToken !== loginToken)) {
     res.status(404).json({ error: 'Die SSH-Sitzung ist nicht mehr aktiv.' });
     return null;
   }
@@ -335,15 +415,132 @@ function connectSsh(profile, auth) {
 
 app.use('/api/auth', requireSameOrigin);
 
+const base32Alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32Encode(buffer) {
+  let bits = 0, value = 0, output = '';
+  for (const byte of buffer) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) { output += base32Alphabet[(value >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits) output += base32Alphabet[(value << (5 - bits)) & 31];
+  return output;
+}
+
+function base32Decode(value) {
+  let bits = 0, current = 0;
+  const output = [];
+  for (const char of String(value).toUpperCase().replace(/=+$/, '').replace(/\s/g, '')) {
+    const index = base32Alphabet.indexOf(char);
+    if (index < 0) throw new Error('Ungültiger TOTP-Schlüssel.');
+    current = (current << 5) | index;
+    bits += 5;
+    if (bits >= 8) { output.push((current >>> (bits - 8)) & 255); bits -= 8; }
+  }
+  return Buffer.from(output);
+}
+
+function totpCode(secret, time = Date.now()) {
+  const counter = BigInt(Math.floor(time / 30000));
+  const message = Buffer.alloc(8);
+  message.writeBigUInt64BE(counter);
+  const digest = crypto.createHmac('sha1', base32Decode(secret)).update(message).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24) | (digest[offset + 1] << 16) | (digest[offset + 2] << 8) | digest[offset + 3];
+  return String(binary % 1_000_000).padStart(6, '0');
+}
+
+function verifyTotp(secret, code) {
+  if (!secret || !/^\d{6}$/.test(String(code || ''))) return false;
+  for (const drift of [-30000, 0, 30000]) {
+    const expected = Buffer.from(totpCode(secret, Date.now() + drift));
+    const supplied = Buffer.from(String(code));
+    if (expected.length === supplied.length && crypto.timingSafeEqual(expected, supplied)) return true;
+  }
+  return false;
+}
+
+function normalizeRecoveryCode(value) { return String(value || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase(); }
+function hashRecoveryCode(value) { return crypto.createHash('sha256').update(normalizeRecoveryCode(value)).digest('hex'); }
+function makeRecoveryCodes() {
+  return Array.from({ length: 10 }, () => {
+    const raw = crypto.randomBytes(8).toString('hex');
+    return { code: `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12)}`, hash: hashRecoveryCode(raw) };
+  });
+}
+
+function consumeRecoveryCode(user, supplied) {
+  const hash = hashRecoveryCode(supplied);
+  const index = (user.recoveryCodes || []).findIndex(candidate => {
+    const stored = Buffer.from(candidate, 'hex');
+    const actual = Buffer.from(hash, 'hex');
+    return stored.length === actual.length && crypto.timingSafeEqual(stored, actual);
+  });
+  if (index < 0) return false;
+  user.recoveryCodes.splice(index, 1);
+  return true;
+}
+
+function authChallengeFromRequest(req, res) {
+  const token = parseCookies(req.headers.cookie).nexterm_challenge;
+  const challenge = token && loginChallenges.get(token);
+  if (!challenge || challenge.expiresAt <= Date.now()) {
+    if (token) loginChallenges.delete(token);
+    clearCookie(res, 'nexterm_challenge');
+    return null;
+  }
+  return { token, challenge };
+}
+
+function setLoginChallenge(req, res, user) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  const activePasskeys = (user.passkeys || []).filter(entry => entry.enabled);
+  loginChallenges.set(token, { userId: user.id, attempts: 0, expiresAt: Date.now() + 5 * 60 * 1000 });
+  setCookie(req, res, 'nexterm_challenge', token, 300);
+  return { factorRequired: true, methods: { otp: Boolean(user.totpEnabled), passkey: activePasskeys.length > 0, recovery: Boolean(user.totpEnabled || activePasskeys.length) } };
+}
+
+function getWebAuthnContext(req) {
+  const host = req.get('host');
+  const protocol = req.protocol;
+  const origin = process.env.NEXTERM_WEBAUTHN_ORIGIN || `${protocol}://${host}`;
+  const parsed = new URL(origin);
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname.toLowerCase());
+  if (parsed.protocol !== 'https:' && !local) throw new Error('Passkeys benötigen eine HTTPS-Verbindung.');
+  return { rpID: process.env.NEXTERM_WEBAUTHN_RP_ID || parsed.hostname, origin };
+}
+
+async function sendPasswordResetMail(user, link) {
+  const { SMTP_HOST, SMTP_PORT = '587', SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
+  if (!SMTP_HOST || !SMTP_FROM) throw new Error('SMTP_HOST und SMTP_FROM müssen für den E-Mail-Versand gesetzt sein.');
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT),
+    secure: SMTP_SECURE === '1',
+    auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS || '' } : undefined
+  });
+  await transporter.sendMail({ from: SMTP_FROM, to: user.email, subject: 'NexTerm Desk Passwort zurücksetzen', text: `Hallo ${user.name},\n\nüber diesen Link kannst du dein Passwort zurücksetzen. Der Link ist 30 Minuten gültig:\n${link}\n\nWenn du diese Anfrage nicht gestellt hast, ignoriere diese Nachricht.` });
+}
+
+function passwordResetEnabled() {
+  return process.env.NEXTERM_PASSWORD_RESET_ENABLED === '1' && Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
+}
+
+async function finishPasswordLogin(req, res, user) {
+  const hasActivePasskey = (user.passkeys || []).some(entry => entry.enabled);
+  if (user.totpEnabled || hasActivePasskey) return res.json(setLoginChallenge(req, res, user));
+  res.json({ user: issueLoginSession(req, res, user) });
+}
+
 app.get('/api/auth/status', async (_req, res) => {
-  try { res.json({ hasAccounts: (await readData()).users.length > 0 }); }
+  try { res.json({ hasAccounts: (await readData()).users.length > 0, passwordResetEnabled: passwordResetEnabled() }); }
   catch { res.status(500).json({ error: 'Kontostatus konnte nicht gelesen werden.' }); }
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(publicUser(req.user)));
 
 app.post('/api/auth/register', async (req, res) => {
-  const { name, username, password } = req.body || {};
+  const { name, username, password, email } = req.body || {};
   if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
     return res.status(400).json({ error: 'Bitte gib einen Namen mit maximal 60 Zeichen ein.' });
   }
@@ -352,6 +549,9 @@ app.post('/api/auth/register', async (req, res) => {
   }
   if (typeof password !== 'string' || password.length < 12 || password.length > 256) {
     return res.status(400).json({ error: 'Das Passwort muss mindestens 12 Zeichen lang sein.' });
+  }
+  if (typeof email !== 'string' || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' });
   }
   try {
     const data = await readData();
@@ -363,13 +563,19 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = (await derivePassword(password, Buffer.from(salt, 'hex'))).toString('hex');
     let hosts = [];
     if (data.users.length === 0) hosts = await readLegacyHosts();
+    const workspace = { id: crypto.randomUUID(), name: 'Mein Workspace', hosts };
     const user = {
       id: crypto.randomUUID(),
       name: name.trim(),
       username: normalizedUsername,
+      email: email.trim().toLowerCase(),
       passwordSalt: salt,
       passwordHash,
-      hosts
+      role: data.users.length === 0 ? 'admin' : 'user',
+      workspaces: [workspace],
+      activeWorkspaceId: workspace.id,
+      passkeys: [],
+      recoveryCodes: []
     };
     data.users.push(user);
     await writeData(data);
@@ -407,10 +613,323 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Benutzername oder Passwort stimmen nicht.' });
     }
     loginAttempts.delete(attemptKey);
-    res.json({ user: issueLoginSession(req, res, user) });
+    return finishPasswordLogin(req, res, user);
   } catch {
     res.status(500).json({ error: 'Anmeldung gerade nicht möglich.' });
   }
+});
+
+app.post('/api/auth/verify-factor', async (req, res) => {
+  const current = authChallengeFromRequest(req, res);
+  if (!current) return res.status(401).json({ error: 'Die Anmeldebestätigung ist abgelaufen. Bitte melde dich erneut an.' });
+  if (current.challenge.attempts >= 5) { loginChallenges.delete(current.token); clearCookie(res, 'nexterm_challenge'); return res.status(429).json({ error: 'Zu viele falsche Codes. Melde dich erneut an.' }); }
+  try {
+    const data = await readData();
+    const user = data.users.find(entry => entry.id === current.challenge.userId);
+    if (!user) return res.status(401).json({ error: 'Konto wurde nicht gefunden.' });
+    const code = String(req.body?.code || '').trim();
+    let valid = user.totpEnabled && verifyTotp(user.totpSecret, code);
+    if (!valid && consumeRecoveryCode(user, code)) { valid = true; await writeData(data); }
+    if (!valid) {
+      current.challenge.attempts++;
+      if (current.challenge.attempts >= 5) { loginChallenges.delete(current.token); clearCookie(res, 'nexterm_challenge'); }
+      return res.status(401).json({ error: 'Code ist ungültig oder wurde bereits verwendet.' });
+    }
+    loginChallenges.delete(current.token);
+    clearCookie(res, 'nexterm_challenge');
+    res.json({ user: issueLoginSession(req, res, user) });
+  } catch { res.status(500).json({ error: 'Anmeldung gerade nicht möglich.' }); }
+});
+
+app.post('/api/auth/request-reset', async (req, res) => {
+  const generic = { message: 'Wenn das Konto existiert und die E-Mail-Funktion aktiv ist, wurde ein Link versendet.' };
+  if (!passwordResetEnabled()) return res.json(generic);
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const data = await readData();
+    const user = data.users.find(entry => entry.email === email && email);
+    if (user) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      user.passwordResetHash = crypto.createHash('sha256').update(token).digest('hex');
+      user.passwordResetExpiresAt = Date.now() + 30 * 60 * 1000;
+      await writeData(data);
+      const link = `${req.protocol}://${req.get('host')}/?reset=${encodeURIComponent(token)}`;
+      await sendPasswordResetMail(user, link);
+    }
+    res.json(generic);
+  } catch { res.json(generic); }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  if (!passwordResetEnabled()) return res.status(404).json({ error: 'Passwortzurücksetzung ist deaktiviert.' });
+  const token = String(req.body?.token || '');
+  const password = String(req.body?.password || '');
+  if (password.length < 12 || password.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
+  try {
+    const data = await readData();
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    const user = data.users.find(entry => entry.passwordResetHash === hash && entry.passwordResetExpiresAt > Date.now());
+    if (!user) return res.status(400).json({ error: 'Der Reset-Link ist ungültig oder abgelaufen.' });
+    user.passwordSalt = crypto.randomBytes(16).toString('hex');
+    user.passwordHash = (await derivePassword(password, Buffer.from(user.passwordSalt, 'hex'))).toString('hex');
+    user.passwordResetHash = null;
+    user.passwordResetExpiresAt = null;
+    user.mustChangePassword = false;
+    await writeData(data);
+    closeUserSshSessions(user.id);
+    for (const [sessionToken, session] of loginSessions) if (session.userId === user.id) loginSessions.delete(sessionToken);
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Passwort konnte nicht zurückgesetzt werden.' }); }
+});
+
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  if (newPassword.length < 12 || newPassword.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
+  const currentHash = await derivePassword(currentPassword, Buffer.from(req.user.passwordSalt, 'hex'));
+  const storedHash = Buffer.from(req.user.passwordHash, 'hex');
+  if (storedHash.length !== currentHash.length || !crypto.timingSafeEqual(currentHash, storedHash)) return res.status(403).json({ error: 'Das aktuelle Passwort stimmt nicht.' });
+  req.user.passwordSalt = crypto.randomBytes(16).toString('hex');
+  req.user.passwordHash = (await derivePassword(newPassword, Buffer.from(req.user.passwordSalt, 'hex'))).toString('hex');
+  req.user.mustChangePassword = false;
+  req.user.passwordResetHash = null;
+  req.user.passwordResetExpiresAt = null;
+  await writeData(req.data);
+  for (const [token, session] of loginSessions) if (session.userId === req.user.id && token !== req.loginToken) loginSessions.delete(token);
+  closeUserSshSessionsExcept(req.user.id, req.loginToken);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.post('/api/auth/change-email', requireAuth, async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const currentPassword = String(req.body?.currentPassword || '');
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' });
+  const candidate = await derivePassword(currentPassword, Buffer.from(req.user.passwordSalt, 'hex'));
+  const stored = Buffer.from(req.user.passwordHash, 'hex');
+  if (stored.length !== candidate.length || !crypto.timingSafeEqual(stored, candidate)) return res.status(403).json({ error: 'Das Passwort stimmt nicht.' });
+  req.user.email = email;
+  req.user.passwordResetHash = null;
+  req.user.passwordResetExpiresAt = null;
+  await writeData(req.data);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.patch('/api/auth/preferences', requireAuth, async (req, res) => {
+  const theme = String(req.body?.theme || '');
+  if (!ACCOUNT_THEMES.has(theme)) return res.status(400).json({ error: 'Bitte wähle ein verfügbares Theme.' });
+  req.user.theme = theme;
+  await writeData(req.data);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.get('/api/auth/security', requireAuth, async (req, res) => {
+  res.json({ totpEnabled: Boolean(req.user.totpEnabled), passkeys: (req.user.passkeys || []).filter(entry => entry.enabled).map(entry => ({ id: entry.id, name: entry.name || 'Passkey' })), recoveryCodesRemaining: (req.user.recoveryCodes || []).length });
+});
+
+app.post('/api/auth/totp/setup', requireAuth, async (req, res) => {
+  if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die OTP-Einrichtung mit deinem aktuellen NexTerm-Passwort.' });
+  const secret = base32Encode(crypto.randomBytes(20));
+  req.user.totpPendingSecret = secret;
+  req.user.totpPendingAt = Date.now();
+  delete req.user.totpPendingRecoveryHashes;
+  await writeData(req.data);
+  const issuer = 'NexTerm Desk';
+  const label = encodeURIComponent(`${issuer}:${req.user.username}`);
+  res.json({ secret, otpauth: `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30` });
+});
+
+app.post('/api/auth/totp/prepare-enable', requireAuth, async (req, res) => {
+  if (!req.user.totpPendingSecret || Date.now() - (req.user.totpPendingAt || 0) > 10 * 60 * 1000) return res.status(400).json({ error: 'Starte die OTP-Einrichtung bitte erneut.' });
+  if (!verifyTotp(req.user.totpPendingSecret, req.body?.code)) return res.status(400).json({ error: 'Der Authenticator-Code stimmt nicht.' });
+  const generated = makeRecoveryCodes();
+  req.user.totpPendingRecoveryHashes = generated.map(item => item.hash);
+  await writeData(req.data);
+  res.json({ codes: generated.map(item => item.code) });
+});
+
+app.post('/api/auth/totp/enable', requireAuth, async (req, res) => {
+  if (req.body?.codesSaved !== true || !req.user.totpPendingSecret || Date.now() - (req.user.totpPendingAt || 0) > 10 * 60 * 1000 || !Array.isArray(req.user.totpPendingRecoveryHashes)) return res.status(400).json({ error: 'Die Einrichtung ist abgelaufen. Starte sie erneut und speichere die neuen Codes.' });
+  req.user.totpSecret = req.user.totpPendingSecret;
+  req.user.totpEnabled = true;
+  req.user.recoveryCodes = req.user.totpPendingRecoveryHashes;
+  delete req.user.totpPendingSecret;
+  delete req.user.totpPendingAt;
+  delete req.user.totpPendingRecoveryHashes;
+  await writeData(req.data);
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/passkeys/register/options', requireAuth, async (req, res) => {
+  try {
+    if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die Passkey-Einrichtung mit deinem aktuellen NexTerm-Passwort.' });
+    req.user.passkeys = (req.user.passkeys || []).filter(entry => entry.enabled);
+    delete req.user.pendingPasskeyId;
+    delete req.user.pendingRecoveryHashes;
+    await writeData(req.data);
+    const { rpID } = getWebAuthnContext(req);
+    const options = await generateRegistrationOptions({
+      rpName: 'NexTerm Desk', rpID, userName: req.user.username, userID: Buffer.from(req.user.id), userDisplayName: req.user.name,
+      attestationType: 'none', authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+      excludeCredentials: (req.user.passkeys || []).map(entry => ({ id: entry.credential.id, transports: entry.credential.transports }))
+    });
+    webAuthnChallenges.set(`register:${req.loginToken}`, { challenge: options.challenge, expiresAt: Date.now() + 5 * 60 * 1000 });
+    res.json(options);
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+app.post('/api/auth/passkeys/register/verify', requireAuth, async (req, res) => {
+  const pending = webAuthnChallenges.get(`register:${req.loginToken}`);
+  if (!pending || pending.expiresAt <= Date.now()) return res.status(400).json({ error: 'Die Passkey-Einrichtung ist abgelaufen. Bitte erneut starten.' });
+  try {
+    const { rpID, origin } = getWebAuthnContext(req);
+    const verification = await verifyRegistrationResponse({ response: req.body, expectedChallenge: pending.challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true });
+    webAuthnChallenges.delete(`register:${req.loginToken}`);
+    if (!verification.verified || !verification.registrationInfo) return res.status(400).json({ error: 'Passkey konnte nicht bestätigt werden.' });
+    const generated = makeRecoveryCodes();
+    const credential = verification.registrationInfo.credential;
+    req.user.passkeys ||= [];
+    const item = { id: crypto.randomUUID(), name: String(req.body?.name || 'Passkey').slice(0, 60), enabled: false, credential: { id: credential.id, publicKey: Buffer.from(credential.publicKey).toString('base64'), counter: credential.counter, transports: req.body?.response?.transports || [] } };
+    req.user.passkeys.push(item);
+    req.user.pendingPasskeyId = item.id;
+    req.user.pendingRecoveryHashes = generated.map(entry => entry.hash);
+    await writeData(req.data);
+    res.json({ codes: generated.map(entry => entry.code), passkeyId: item.id });
+  } catch { res.status(400).json({ error: 'Passkey konnte nicht registriert werden. Prüfe HTTPS und den verwendeten Browser.' }); }
+});
+
+app.post('/api/auth/passkeys/enable', requireAuth, async (req, res) => {
+  if (req.body?.codesSaved !== true || !req.user.pendingPasskeyId || !Array.isArray(req.user.pendingRecoveryHashes)) return res.status(400).json({ error: 'Speichere zuerst die Wiederherstellungscodes.' });
+  const passkey = req.user.passkeys.find(entry => entry.id === req.user.pendingPasskeyId);
+  if (!passkey) return res.status(400).json({ error: 'Passkey wurde nicht gefunden.' });
+  passkey.enabled = true;
+  req.user.recoveryCodes = req.user.pendingRecoveryHashes;
+  delete req.user.pendingPasskeyId;
+  delete req.user.pendingRecoveryHashes;
+  await writeData(req.data);
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/passkeys/login/options', async (req, res) => {
+  const current = authChallengeFromRequest(req, res);
+  if (!current) return res.status(401).json({ error: 'Die Anmeldung ist abgelaufen.' });
+  try {
+    const data = await readData();
+    const user = data.users.find(entry => entry.id === current.challenge.userId);
+    const credentials = (user?.passkeys || []).filter(entry => entry.enabled).map(entry => entry.credential);
+    if (!user || !credentials.length) return res.status(400).json({ error: 'Für dieses Konto ist kein Passkey aktiviert.' });
+    const { rpID } = getWebAuthnContext(req);
+    const options = await generateAuthenticationOptions({ rpID, userVerification: 'required', allowCredentials: credentials.map(credential => ({ id: credential.id, transports: credential.transports })) });
+    webAuthnChallenges.set(`login:${current.token}`, { challenge: options.challenge, expiresAt: Date.now() + 5 * 60 * 1000 });
+    res.json(options);
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+app.post('/api/auth/passkeys/login/verify', async (req, res) => {
+  const current = authChallengeFromRequest(req, res);
+  if (!current) return res.status(401).json({ error: 'Die Anmeldung ist abgelaufen.' });
+  const pending = webAuthnChallenges.get(`login:${current.token}`);
+  if (!pending || pending.expiresAt <= Date.now()) return res.status(400).json({ error: 'Die Passkey-Anfrage ist abgelaufen.' });
+  try {
+    const data = await readData();
+    const user = data.users.find(entry => entry.id === current.challenge.userId);
+    const credentialId = String(req.body?.id || '');
+    const passkey = (user?.passkeys || []).find(entry => entry.enabled && entry.credential.id === credentialId);
+    if (!user || !passkey) return res.status(401).json({ error: 'Passkey wurde nicht erkannt.' });
+    const { rpID, origin } = getWebAuthnContext(req);
+    const verification = await verifyAuthenticationResponse({ response: req.body, expectedChallenge: pending.challenge, expectedOrigin: origin, expectedRPID: rpID, credential: { id: passkey.credential.id, publicKey: Buffer.from(passkey.credential.publicKey, 'base64'), counter: passkey.credential.counter, transports: passkey.credential.transports }, requireUserVerification: true });
+    webAuthnChallenges.delete(`login:${current.token}`);
+    if (!verification.verified) return res.status(401).json({ error: 'Passkey-Anmeldung fehlgeschlagen.' });
+    passkey.credential.counter = verification.authenticationInfo.newCounter;
+    await writeData(data);
+    loginChallenges.delete(current.token);
+    clearCookie(res, 'nexterm_challenge');
+    res.json({ user: issueLoginSession(req, res, user) });
+  } catch { res.status(401).json({ error: 'Passkey-Anmeldung fehlgeschlagen.' }); }
+});
+
+app.post('/api/auth/security/disable', requireAuth, async (req, res) => {
+  const password = String(req.body?.password || '');
+  const code = String(req.body?.code || '');
+  const candidate = await derivePassword(password, Buffer.from(req.user.passwordSalt, 'hex'));
+  const stored = Buffer.from(req.user.passwordHash, 'hex');
+  if (candidate.length !== stored.length || !crypto.timingSafeEqual(candidate, stored)) return res.status(403).json({ error: 'Das Passwort stimmt nicht.' });
+  const codeValid = (req.user.totpEnabled && verifyTotp(req.user.totpSecret, code)) || consumeRecoveryCode(req.user, code);
+  if (!codeValid) return res.status(403).json({ error: 'Bestätige die Änderung mit deinem OTP- oder Wiederherstellungscode.' });
+  req.user.totpEnabled = false;
+  delete req.user.totpSecret;
+  req.user.passkeys = [];
+  req.user.recoveryCodes = [];
+  await writeData(req.data);
+  res.json({ ok: true });
+});
+
+app.use('/api/admin', requireSameOrigin, requireAuth);
+app.get('/api/admin/users', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
+  res.json((req.data.users || []).map(user => ({ id: user.id, username: user.username, name: user.name, email: user.email || '', mustChangePassword: Boolean(user.mustChangePassword) })));
+});
+
+app.post('/api/admin/users/:id/reset-password', async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
+  if (!await verifyAccountPassword(req.user, req.body?.adminPassword)) return res.status(403).json({ error: 'Bestätige das Zurücksetzen mit deinem aktuellen Admin-Passwort.' });
+  const password = String(req.body?.password || '');
+  if (password.length < 12 || password.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
+  const target = req.data.users.find(user => user.id === req.params.id);
+  if (!target) return res.status(404).json({ error: 'Konto wurde nicht gefunden.' });
+  target.passwordSalt = crypto.randomBytes(16).toString('hex');
+  target.passwordHash = (await derivePassword(password, Buffer.from(target.passwordSalt, 'hex'))).toString('hex');
+  target.mustChangePassword = true;
+  target.passwordResetHash = null;
+  target.passwordResetExpiresAt = null;
+  await writeData(req.data);
+  for (const [token, session] of loginSessions) if (session.userId === target.id) loginSessions.delete(token);
+  closeUserSshSessions(target.id);
+  res.json({ ok: true });
+});
+
+app.use('/api/workspaces', requireSameOrigin, requireAuth);
+app.get('/api/workspaces', (req, res) => {
+  const active = activeWorkspace(req.user);
+  res.json({ workspaces: req.user.workspaces.map(({ id, name }) => ({ id, name })), activeWorkspaceId: active.id });
+});
+
+app.post('/api/workspaces', async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name || name.length > 60) return res.status(400).json({ error: 'Der Workspace-Name muss 1 bis 60 Zeichen lang sein.' });
+  if (req.user.workspaces.length >= 30) return res.status(400).json({ error: 'Du kannst höchstens 30 Workspaces anlegen.' });
+  const workspace = { id: crypto.randomUUID(), name, hosts: [] };
+  req.user.workspaces.push(workspace);
+  req.user.activeWorkspaceId = workspace.id;
+  await writeData(req.data);
+  res.status(201).json({ workspace: { id: workspace.id, name: workspace.name }, activeWorkspaceId: workspace.id });
+});
+
+app.post('/api/workspaces/:id/activate', async (req, res) => {
+  if (!req.user.workspaces.some(workspace => workspace.id === req.params.id)) return res.status(404).json({ error: 'Workspace wurde nicht gefunden.' });
+  req.user.activeWorkspaceId = req.params.id;
+  await writeData(req.data);
+  res.json({ activeWorkspaceId: req.params.id });
+});
+
+app.patch('/api/workspaces/:id', async (req, res) => {
+  const workspace = req.user.workspaces.find(item => item.id === req.params.id);
+  const name = String(req.body?.name || '').trim();
+  if (!workspace) return res.status(404).json({ error: 'Workspace wurde nicht gefunden.' });
+  if (!name || name.length > 60) return res.status(400).json({ error: 'Der Workspace-Name muss 1 bis 60 Zeichen lang sein.' });
+  workspace.name = name;
+  await writeData(req.data);
+  res.json({ id: workspace.id, name: workspace.name });
+});
+
+app.delete('/api/workspaces/:id', async (req, res) => {
+  if (req.user.workspaces.length <= 1) return res.status(400).json({ error: 'Der letzte Workspace kann nicht entfernt werden.' });
+  const workspace = req.user.workspaces.find(item => item.id === req.params.id);
+  if (!workspace) return res.status(404).json({ error: 'Workspace wurde nicht gefunden.' });
+  req.user.workspaces = req.user.workspaces.filter(item => item.id !== workspace.id);
+  if (req.user.activeWorkspaceId === workspace.id) req.user.activeWorkspaceId = req.user.workspaces[0].id;
+  for (const session of sessions.values()) if (session.userId === req.user.id && session.workspaceId === workspace.id) { sessions.delete(session.id); session.closed = true; session.client.end(); }
+  await writeData(req.data);
+  res.json({ activeWorkspaceId: req.user.activeWorkspaceId });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -420,13 +939,14 @@ app.post('/api/auth/logout', (req, res) => {
     loginSessions.delete(token);
     closeUserSshSessions(session.userId);
   }
-  res.setHeader('Set-Cookie', 'nexterm_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+  clearCookie(res, 'nexterm_session');
+  clearCookie(res, 'nexterm_challenge');
   res.status(204).end();
 });
 
 app.use(['/api/hosts', '/api/sessions'], requireSameOrigin, requireAuth);
 
-app.get('/api/hosts', (req, res) => res.json((req.user.hosts || []).map(publicHost)));
+app.get('/api/hosts', (req, res) => res.json((activeWorkspace(req.user).hosts || []).map(publicHost)));
 
 app.post('/api/hosts', async (req, res) => {
   const { name, host, port, username } = req.body || {};
@@ -442,8 +962,8 @@ app.post('/api/hosts', async (req, res) => {
       id: crypto.randomUUID(), name: name.trim(), host: host.trim(),
       port: parsedPort, username: username.trim(), fingerprint: null
     };
-    req.user.hosts ||= [];
-    req.user.hosts.push(hostProfile);
+    const workspace = activeWorkspace(req.user);
+    workspace.hosts.push(hostProfile);
     await writeData(req.data);
     res.status(201).json(publicHost(hostProfile));
   } catch {
@@ -453,13 +973,14 @@ app.post('/api/hosts', async (req, res) => {
 
 app.delete('/api/hosts/:id', async (req, res) => {
   try {
-    const hosts = req.user.hosts || [];
+    const workspace = activeWorkspace(req.user);
+    const hosts = workspace.hosts || [];
     const next = hosts.filter(host => host.id !== req.params.id);
     if (next.length === hosts.length) return res.status(404).json({ error: 'Server nicht gefunden.' });
-    req.user.hosts = next;
+    workspace.hosts = next;
     await writeData(req.data);
     for (const session of sessions.values()) {
-      if (session.userId === req.user.id && session.host.id === req.params.id) {
+      if (session.userId === req.user.id && session.workspaceId === workspace.id && session.host.id === req.params.id) {
         sessions.delete(session.id);
         session.closed = true;
         session.client.end();
@@ -476,12 +997,13 @@ app.post('/api/sessions', async (req, res) => {
   }
   let connected;
   try {
-    const profile = (req.user.hosts || []).find(host => host.id === hostId);
+    const workspace = activeWorkspace(req.user);
+    const profile = workspace.hosts.find(host => host.id === hostId);
     if (!profile) return res.status(404).json({ error: 'Serverprofil nicht gefunden.' });
     try { connected = await connectSsh(profile, auth); }
     catch (error) {
       if (error.fingerprint) return res.status(409).json({ error: 'HOST_KEY', fingerprint: error.fingerprint, changed: error.changed });
-      return res.status(401).json({ error: error.message || 'SSH-Verbindung fehlgeschlagen.' });
+      return res.status(422).json({ error: error.message || 'SSH-Verbindung fehlgeschlagen.' });
     }
 
     if (connected.fingerprint && profile.fingerprint !== connected.fingerprint) {
@@ -489,7 +1011,7 @@ app.post('/api/sessions', async (req, res) => {
       await writeData(req.data);
     }
     const id = crypto.randomUUID();
-    const session = { id, userId: req.user.id, host: publicHost(profile), ...connected, socket: null, buffer: [], closed: false, previousMetrics: null };
+    const session = { id, userId: req.user.id, loginToken: req.loginToken, workspaceId: workspace.id, host: publicHost(profile), ...connected, socket: null, buffer: [], closed: false, previousMetrics: null };
     sessions.set(id, session);
     session.shell.on('data', data => {
       if (session.socket?.readyState === WebSocket.OPEN) session.socket.send(data);
@@ -518,12 +1040,13 @@ app.post('/api/sessions', async (req, res) => {
 });
 
 app.get('/api/sessions', (req, res) => {
-  res.json([...sessions.values()].filter(session => !session.closed && session.userId === req.user.id).map(session => ({ id: session.id, host: session.host, home: session.home })));
+  const workspaceId = activeWorkspace(req.user).id;
+  res.json([...sessions.values()].filter(session => !session.closed && session.userId === req.user.id && session.loginToken === req.loginToken && session.workspaceId === workspaceId).map(session => ({ id: session.id, host: session.host, home: session.home })));
 });
 
 app.delete('/api/sessions/:id', (req, res) => {
   const session = sessions.get(req.params.id);
-  if (session && session.userId !== req.user.id) return res.status(404).json({ error: 'SSH-Sitzung nicht gefunden.' });
+  if (session && (session.userId !== req.user.id || session.loginToken !== req.loginToken || session.workspaceId !== activeWorkspace(req.user).id)) return res.status(404).json({ error: 'SSH-Sitzung nicht gefunden.' });
   if (session) {
     sessions.delete(session.id);
     session.closed = true;
@@ -533,7 +1056,7 @@ app.delete('/api/sessions/:id', (req, res) => {
 });
 
 app.get('/api/sessions/:id/files', async (req, res) => {
-  const session = getSession(req.params.id, res, req.user.id);
+  const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
   if (!session) return;
   const remotePath = typeof req.query.path === 'string' ? req.query.path : session.home;
   session.client.sftp((error, sftp) => {
@@ -553,7 +1076,7 @@ app.get('/api/sessions/:id/files', async (req, res) => {
 });
 
 app.get('/api/sessions/:id/download', (req, res) => {
-  const session = getSession(req.params.id, res, req.user.id);
+  const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
   if (!session) return;
   const remotePath = typeof req.query.path === 'string' ? req.query.path : '';
   if (!remotePath) return res.status(400).json({ error: 'Dateipfad fehlt.' });
@@ -572,7 +1095,7 @@ app.get('/api/sessions/:id/download', (req, res) => {
 });
 
 app.post('/api/sessions/:id/upload', (req, res) => {
-  const session = getSession(req.params.id, res, req.user.id);
+  const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
   if (!session) return;
   const remotePath = typeof req.query.path === 'string' ? req.query.path : '';
   if (!remotePath) return res.status(400).json({ error: 'Zielpfad fehlt.' });
@@ -609,7 +1132,7 @@ function parseMetrics(raw) {
 }
 
 app.get('/api/sessions/:id/metrics', async (req, res) => {
-  const session = getSession(req.params.id, res, req.user.id);
+  const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
   if (!session) return;
   const command = "printf 'cpu '; awk '$1==\"cpu\"{for(i=2;i<=9;i++) printf \"%s \",$i; print \"\"}' /proc/stat; awk '/MemTotal:/{t=$2}/MemAvailable:/{a=$2}END{printf \"mem %s %s\\n\",t,a}' /proc/meminfo; df -Pk / | awk 'END{printf \"disk %s %s %s\\n\",$2,$3,$4}'; awk 'NR>2{gsub(/:/,\"\",$1);if($1!=\"lo\"){rx+=$2;tx+=$10}}END{printf \"net %.0f %.0f\\n\",rx,tx}' /proc/net/dev";
   try {
@@ -644,7 +1167,7 @@ try {
   app.get('/{*splat}', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 } catch {}
 
-server.on('upgrade', (request, socket, head) => {
+server.on('upgrade', async (request, socket, head) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${activeHost}:${activePort}`}`);
   if (requestUrl.pathname !== '/terminal') return socket.destroy();
   const origin = request.headers.origin;
@@ -660,7 +1183,12 @@ server.on('upgrade', (request, socket, head) => {
   const loginSession = token && loginSessions.get(token);
   if (!loginSession || loginSession.expiresAt <= Date.now()) return socket.destroy();
   const session = sessions.get(requestUrl.searchParams.get('id'));
-  if (!session || session.closed || session.userId !== loginSession.userId) return socket.destroy();
+  if (!session || session.closed || session.userId !== loginSession.userId || session.loginToken !== token) return socket.destroy();
+  try {
+    const data = await readData();
+    const user = data.users.find(entry => entry.id === loginSession.userId);
+    if (!user || activeWorkspace(user).id !== session.workspaceId) return socket.destroy();
+  } catch { return socket.destroy(); }
   wss.handleUpgrade(request, socket, head, ws => wss.emit('connection', ws, request, session));
 });
 

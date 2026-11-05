@@ -1,6 +1,7 @@
 import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import './style.css';
 
 const icons = {
@@ -31,12 +32,15 @@ const icons = {
 };
 
 const state = {
-  user: null,
+  user: null, workspaces: [], activeWorkspaceId: null, passwordResetEnabled: false,
   hosts: [], sessions: [], activeId: null, route: 'overview', query: '',
   metrics: [], metricsSession: null, latestMetrics: null,
   filePath: '', fileSession: null, files: [],
   terminalEntries: new Map(), monitorTimer: null
 };
+
+const ACCOUNT_THEMES = ['material-dark', 'material-white', 'muxxle'];
+let themeSaveQueue = Promise.resolve();
 
 const root = document.querySelector('#app');
 const isLocalInstance = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname.toLowerCase());
@@ -44,7 +48,7 @@ const appMarkup = `
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand-row"><div class="brand-mark">${icons.brand}</div><div class="brand-name">nexterm<span>DESK</span></div><button class="icon-button mobile-menu" id="mobileMenu" aria-label="Menü">${icons.menu}</button></div>
-      <button class="workspace-switch"><span class="workspace-avatar">S</span><span class="workspace-copy"><b>Persönlicher Workspace</b><small>${isLocalInstance ? 'Lokaler Tresor' : 'Webserver-Workspace'}</small></span><span class="workspace-caret">⌄</span></button>
+      <button class="workspace-switch" id="workspaceSwitch" aria-haspopup="true" aria-expanded="false"><span class="workspace-avatar" id="workspaceAvatar">W</span><span class="workspace-copy"><b id="workspaceName">Mein Workspace</b><small id="workspaceContext">${isLocalInstance ? 'Lokaler Tresor' : 'Webserver-Workspace'}</small></span><span class="workspace-caret">⌄</span></button>
       <button class="add-connection" id="addHost">${icons.plus}<span>Server hinzufügen</span><kbd>⌘ K</kbd></button>
       <label class="search-box">${icons.search}<input id="hostSearch" placeholder="Server suchen…" autocomplete="off"><kbd>/</kbd></label>
       <div class="side-section"><div class="section-heading"><span>VERBINDUNGEN</span><span id="hostCount" class="count-pill">0</span></div><div id="hostList" class="host-list"></div></div>
@@ -55,7 +59,7 @@ const appMarkup = `
       </div>
     </aside>
     <main class="main-area">
-      <header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><button class="help-button" id="helpButton">Hilfe</button><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
+      <header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><label class="theme-picker"><span>THEME</span><select id="themeSelect" aria-label="Farbschema"><option value="material-dark">Darkmode · Material Dark</option><option value="material-white">Whitemode · Material White</option><option value="muxxle">Muxxle · Dark Red</option></select></label><button class="help-button" id="helpButton">Hilfe</button><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
       <div class="page-content">
         <div class="page-heading"><div><div class="eyebrow" id="pageEyebrow">DEIN SERVER-WORKSPACE</div><h1 id="pageTitle">Alles an einem Ort.</h1><p id="pageSubtitle">Verbinde dich sicher mit deinen Servern und behalte den Überblick.</p></div><div class="heading-actions"><button class="button button-secondary" id="quickTerminal" disabled>${icons.terminal}Terminal öffnen</button><button class="button button-primary" id="headingAdd">${icons.plus}Server verbinden</button></div></div>
         <div class="route-tabs" id="routeTabs">
@@ -108,6 +112,40 @@ async function api(url, options = {}) {
   return body;
 }
 
+function terminalThemeFor(theme) {
+  const common = { black: '#242731', red: '#ff777f', green: '#61d99d', yellow: '#eacb77', blue: '#7faeff', magenta: '#c1a3ff', cyan: '#6bd5df', white: '#dce2ed', brightBlack: '#646d80', brightRed: '#ff969c', brightGreen: '#83e6b1', brightYellow: '#f5d88d', brightBlue: '#9bc0ff', brightMagenta: '#d1b9ff', brightCyan: '#8ce3ea', brightWhite: '#ffffff' };
+  const palettes = {
+    'material-dark': { background: '#141218', foreground: '#e6e1e5', cursor: '#d0bcff', cursorAccent: '#141218', selectionBackground: '#d0bcff55', magenta: '#d0bcff', brightMagenta: '#eaddff' },
+    'material-white': { background: '#fffbff', foreground: '#1c1b1f', cursor: '#6750a4', cursorAccent: '#fffbff', selectionBackground: '#6750a433', magenta: '#6750a4', brightMagenta: '#7e67ad', white: '#1c1b1f', brightWhite: '#38343b' },
+    muxxle: { background: '#140b0c', foreground: '#f2dfe0', cursor: '#ffb4ab', cursorAccent: '#140b0c', selectionBackground: '#ffb4ab55', magenta: '#ffb4ab', brightMagenta: '#ffd9d4' }
+  };
+  return { ...common, ...(palettes[theme] || palettes['material-dark']) };
+}
+
+function applyTheme(theme) {
+  const selected = ACCOUNT_THEMES.includes(theme) ? theme : 'material-dark';
+  document.documentElement.dataset.theme = selected;
+  for (const entry of state.terminalEntries.values()) entry.terminal.options.theme = terminalThemeFor(selected);
+  return selected;
+}
+
+function saveTheme(theme) {
+  const selected = applyTheme(theme);
+  drawCharts();
+  const userId = state.user?.id;
+  if (!userId) return;
+  themeSaveQueue = themeSaveQueue.catch(() => {}).then(async () => {
+    const result = await api('/api/auth/preferences', { method: 'PATCH', body: JSON.stringify({ theme: selected }) });
+    if (state.user?.id === userId) state.user = result.user;
+  }).catch(error => {
+    if (state.user?.id === userId && $('#themeSelect')?.value === selected) {
+      const savedTheme = applyTheme(state.user.theme);
+      $('#themeSelect').value = savedTheme;
+      toast(`Theme konnte nicht gespeichert werden: ${error.message}`, 'error');
+    }
+  });
+}
+
 function showAuthScreen(mode = 'login', errorMessage = '') {
   const registering = mode === 'register';
   root.classList.remove('auth-checking');
@@ -120,31 +158,35 @@ function showAuthScreen(mode = 'login', errorMessage = '') {
         <div class="auth-aside-bottom"><span>SSH · SFTP · MONITORING</span><span>${isLocalInstance ? 'LOKALER TRESOR' : 'WEBSERVER'}</span></div>
       </aside>
       <main class="auth-main"><section class="auth-card"><div class="auth-mobile-brand"><span class="brand-mark">${icons.brand}</span><span>NEXTERM<small>DESK</small></span></div><div class="auth-card-kicker">${registering ? 'NEUES LOKALES KONTO' : 'SICHERER ZUGANG'}</div><h2>${registering ? 'Konto anlegen' : 'Willkommen zurück'}</h2><p class="auth-card-intro">${registering ? 'Erstelle dein persönliches Konto und verwalte deine eigenen Server.' : 'Melde dich an, um deine Server und Verbindungen zu öffnen.'}</p>
-        <form id="appAuthForm" novalidate>${registering ? `<label class="form-field"><span>Anzeigename</span><input name="name" placeholder="Dein Name" autocomplete="name" maxlength="60" required></label>` : ''}<label class="form-field"><span>Benutzername</span><input name="username" placeholder="z. B. alex" autocomplete="username" minlength="3" maxlength="32" required></label><label class="form-field"><span>Passwort${registering ? ' · mindestens 12 Zeichen' : ''}</span><input name="password" type="password" placeholder="${registering ? 'Mindestens 12 Zeichen' : 'Dein Passwort'}" autocomplete="${registering ? 'new-password' : 'current-password'}" ${registering ? 'minlength="12"' : ''} maxlength="256" required></label><div class="auth-form-error" id="authError" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</div><button class="button button-primary auth-submit" id="authSubmit" type="submit">${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}</button></form>
-        <div class="auth-switch">${registering ? 'Schon ein Konto?' : 'Noch kein Konto?'} <button type="button" id="authSwitch">${registering ? 'Anmelden' : 'Konto anlegen'}</button></div><div class="auth-card-security">${icons.lock}<span>Passwörter werden nur als gesalzener Hash gespeichert. Serverzugänge gehören jeweils zu deinem Konto.</span></div>
+        <form id="appAuthForm" novalidate>${registering ? `<label class="form-field"><span>Anzeigename</span><input name="name" placeholder="Dein Name" autocomplete="name" maxlength="60" required></label><label class="form-field"><span>E-Mail-Adresse</span><input name="email" type="email" placeholder="name@example.com" autocomplete="email" maxlength="254" required></label>` : ''}<label class="form-field"><span>Benutzername</span><input name="username" placeholder="z. B. alex" autocomplete="username" minlength="3" maxlength="32" required></label><label class="form-field"><span>Passwort${registering ? ' · mindestens 12 Zeichen' : ''}</span><input name="password" type="password" placeholder="${registering ? 'Mindestens 12 Zeichen' : 'Dein Passwort'}" autocomplete="${registering ? 'new-password' : 'current-password'}" ${registering ? 'minlength="12"' : ''} maxlength="256" required></label><div class="auth-form-error" id="authError" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</div><button class="button button-primary auth-submit" id="authSubmit" type="submit">${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}</button></form>
+        ${!registering && state.passwordResetEnabled ? '<button type="button" class="auth-reset-link" id="requestReset">Passwort vergessen?</button>' : ''}<div class="auth-switch">${registering ? 'Schon ein Konto?' : 'Noch kein Konto?'} <button type="button" id="authSwitch">${registering ? 'Anmelden' : 'Konto anlegen'}</button></div><div class="auth-card-security">${icons.lock}<span>Passwörter werden nur als gesalzener Hash gespeichert. Serverzugänge gehören jeweils zu deinem Konto.</span></div>
       </section><div class="auth-main-foot">${isLocalInstance ? 'Deine Kontodaten bleiben verschlüsselt auf diesem Gerät.' : 'Melde dich mit dem Konto dieser NexTerm-Instanz an.'}</div></main>
     </div>`;
 
   $('#authSwitch').addEventListener('click', () => showAuthScreen(registering ? 'login' : 'register'));
+  $('#requestReset')?.addEventListener('click', requestPasswordReset);
   $('#appAuthForm').addEventListener('submit', async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const username = String(form.get('username') || '').trim();
     const password = String(form.get('password') || '');
     const name = String(form.get('name') || '').trim();
+    const email = String(form.get('email') || '').trim();
     const error = $('#authError');
     const submit = $('#authSubmit');
     error.hidden = true;
     if (registering && !name) { error.textContent = 'Bitte gib deinen Anzeigenamen ein.'; error.hidden = false; return; }
+    if (registering && !email) { error.textContent = 'Bitte gib deine E-Mail-Adresse ein.'; error.hidden = false; return; }
     if (!username || !password) { error.textContent = 'Benutzername und Passwort sind erforderlich.'; error.hidden = false; return; }
     if (registering && password.length < 12) { error.textContent = 'Wähle ein Passwort mit mindestens 12 Zeichen.'; error.hidden = false; return; }
     submit.disabled = true;
     submit.innerHTML = '<span class="spinner"></span>Wird verarbeitet…';
     try {
       const result = registering
-        ? await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, username, password }) })
+        ? await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, username, email, password }) })
         : await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
-      await mountWorkspace(result.user);
+      if (result.factorRequired) showFactorScreen(result.methods, username);
+      else await mountWorkspace(result.user);
     } catch (authError) {
       const currentError = $('#authError');
       const currentSubmit = $('#authSubmit');
@@ -158,16 +200,67 @@ function showAuthScreen(mode = 'login', errorMessage = '') {
   setTimeout(() => $('#appAuthForm input[name="username"]')?.focus(), 30);
 }
 
+async function requestPasswordReset() {
+  const email = prompt('E-Mail-Adresse deines Kontos:');
+  if (!email) return;
+  try {
+    const result = await api('/api/auth/request-reset', { method: 'POST', body: JSON.stringify({ email }) });
+    toast(result.message || 'Wenn das Konto existiert, wurde ein Link versendet.');
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function showFactorScreen(methods, username) {
+  root.classList.remove('auth-checking');
+  root.classList.add('auth-screen');
+  root.innerHTML = `<div class="auth-layout"><aside class="auth-aside"><div class="auth-brand"><span class="brand-mark">${icons.brand}</span><span>NEXTERM<small>DESK</small></span></div><div class="auth-pitch"><span class="auth-local-tag"><i></i> ZWEITER FAKTOR</span><h1>Bestätige<br><em>deine Anmeldung.</em></h1><p>Gib den Code aus deiner Authenticator-App ein oder verwende einen gespeicherten Wiederherstellungscode.</p></div><div class="auth-aside-bottom"><span>SSH · SFTP · MONITORING</span><span>${isLocalInstance ? 'LOKALER TRESOR' : 'WEBSERVER'}</span></div></aside><main class="auth-main"><section class="auth-card"><div class="auth-card-kicker">ZUSÄTZLICHE BESTÄTIGUNG</div><h2>Anmeldung schützen</h2><p class="auth-card-intro">Konto <b>${escapeHtml(username)}</b></p><form id="factorForm"><label class="form-field"><span>Authenticator- oder Wiederherstellungscode</span><input name="code" autocomplete="one-time-code" inputmode="text" maxlength="32" required></label><div class="auth-form-error" id="factorError" hidden></div><button class="button button-primary auth-submit" type="submit">Bestätigen${icons.arrow}</button></form>${methods.passkey ? `<button type="button" class="button button-secondary factor-passkey" id="factorPasskey">Mit Passkey bestätigen</button>` : ''}<button type="button" class="auth-reset-link" id="factorBack">Zurück zur Anmeldung</button><div class="auth-card-security">${icons.lock}<span>Wiederherstellungscodes können jeweils nur einmal verwendet werden.</span></div></section></main></div>`;
+  $('#factorForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const code = String(new FormData(event.currentTarget).get('code') || '').trim();
+    try {
+      const result = await api('/api/auth/verify-factor', { method: 'POST', body: JSON.stringify({ code }) });
+      await mountWorkspace(result.user);
+    } catch (error) { const box = $('#factorError'); box.textContent = error.message; box.hidden = false; }
+  });
+  $('#factorPasskey')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try {
+      const options = await api('/api/auth/passkeys/login/options', { method: 'POST', body: '{}' });
+      const credential = await startAuthentication({ optionsJSON: options });
+      const result = await api('/api/auth/passkeys/login/verify', { method: 'POST', body: JSON.stringify(credential) });
+      await mountWorkspace(result.user);
+    } catch (error) { const box = $('#factorError'); box.textContent = error.message; box.hidden = false; event.currentTarget.disabled = false; }
+  });
+  $('#factorBack').addEventListener('click', () => showAuthScreen('login', 'Bitte melde dich erneut an.'));
+}
+
+function showResetScreen(token) {
+  root.classList.remove('auth-checking');
+  root.classList.add('auth-screen');
+  root.innerHTML = `<div class="auth-layout reset-layout"><main class="auth-main"><section class="auth-card"><div class="auth-card-kicker">PASSWORT ZURÜCKSETZEN</div><h2>Neues Passwort</h2><p class="auth-card-intro">Wähle ein neues Passwort mit mindestens 12 Zeichen.</p><form id="resetForm"><label class="form-field"><span>Neues Passwort</span><input type="password" name="password" minlength="12" maxlength="256" autocomplete="new-password" required></label><div class="auth-form-error" id="resetError" hidden></div><button class="button button-primary auth-submit" type="submit">Passwort speichern${icons.arrow}</button></form></section></main></div>`;
+  $('#resetForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const password = String(new FormData(event.currentTarget).get('password') || '');
+    try {
+      await api('/api/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
+      history.replaceState({}, '', location.pathname);
+      showAuthScreen('login', 'Passwort gespeichert. Du kannst dich jetzt anmelden.');
+    } catch (error) { const box = $('#resetError'); box.textContent = error.message; box.hidden = false; }
+  });
+}
+
 async function mountWorkspace(user) {
   state.user = user;
+  user.theme = applyTheme(user.theme);
   root.classList.remove('auth-screen', 'auth-checking');
   root.innerHTML = appMarkup;
+  $('#themeSelect').value = user.theme;
   $('#accountName').textContent = user.name;
   $('#accountUsername').textContent = `@${user.username}`;
   $('#accountAvatar').textContent = user.name.slice(0, 1).toUpperCase();
   $('#headerAvatar').textContent = user.name.slice(0, 1).toUpperCase();
   bindEvents();
   await loadWorkspace();
+  if (user.mustChangePassword || !user.email) openAccountModal(Boolean(user.mustChangePassword), !user.email);
 }
 
 async function logoutUser() {
@@ -180,6 +273,7 @@ async function logoutUser() {
   }
   state.terminalEntries.clear();
   state.user = null;
+  applyTheme('material-dark');
   state.hosts = [];
   state.sessions = [];
   state.activeId = null;
@@ -413,6 +507,103 @@ function openAuthModal(host, targetRoute) {
   });
 }
 
+async function openAccountModal(forcePasswordChange = false, forceEmail = false) {
+  const modalRoot = $('#modalRoot');
+  if (!modalRoot) return;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-card account-modal"><div class="modal-top"><div><div class="eyebrow">KONTO & SICHERHEIT</div><h2>${forcePasswordChange ? 'Neues Passwort festlegen' : forceEmail ? 'E-Mail-Adresse hinterlegen' : 'Kontoeinstellungen'}</h2></div>${forcePasswordChange || forceEmail ? '' : `<button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button>`}</div><div id="accountModalContent"><div class="inline-empty"><span class="spinner"></span><b>Einstellungen werden geladen</b></div></div></section></div>`;
+  if (!forcePasswordChange && !forceEmail) {
+    modalRoot.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
+    modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) modalRoot.innerHTML = ''; });
+  }
+  let security = { totpEnabled: false, passkeys: [], recoveryCodesRemaining: 0 };
+  let adminUsers = [];
+  try { security = await api('/api/auth/security'); } catch (error) { toast(error.message, 'error'); }
+  if (state.user?.role === 'admin') try { adminUsers = await api('/api/admin/users'); } catch (error) { toast(error.message, 'error'); }
+  if (!$('#accountModalContent')) return;
+  const adminSection = state.user?.role === 'admin' ? `<section class="account-section"><div class="section-title-row"><div><div class="eyebrow">ADMIN · NUR PASSWORT-RESET</div><h3>Kontopasswörter zurücksetzen</h3></div></div><div class="admin-reset-list" id="adminResetList">${adminUsers.filter(user => user.id !== state.user.id).map(user => `<form class="admin-reset-row" data-user="${escapeHtml(user.id)}"><div><b>${escapeHtml(user.name)} <small>@${escapeHtml(user.username)}</small></b><span>${escapeHtml(user.email || 'Keine E-Mail-Adresse')}</span></div><input type="password" name="password" placeholder="Temporäres Passwort · 12+ Zeichen" minlength="12" maxlength="256" autocomplete="new-password" required><input type="password" name="adminPassword" placeholder="Dein Admin-Passwort" autocomplete="current-password" required><button class="button button-secondary" type="submit">Zurücksetzen</button></form>`).join('') || '<p class="account-help">Es gibt keine anderen Konten zum Zurücksetzen.</p>'}</div></section>` : '';
+  const securityStatus = [security.totpEnabled ? 'OTP aktiv' : '', ...security.passkeys.map(passkey => passkey.name), `${security.recoveryCodesRemaining} Wiederherstellungscodes verfügbar`].filter(Boolean).join(' · ') || 'Kein zusätzlicher Faktor aktiviert.';
+  $('#accountModalContent').innerHTML = `<div class="account-scroll"><section class="account-section"><h3>E-Mail-Adresse</h3><p class="account-help">Wird für künftige Passwort-Resets verwendet. Der Mailversand lässt sich serverseitig aktivieren.</p><form id="emailForm" class="account-form"><label class="form-field"><span>E-Mail-Adresse</span><input type="email" name="email" value="${escapeHtml(state.user.email || '')}" maxlength="254" autocomplete="email" required></label><label class="form-field"><span>Passwort bestätigen</span><input type="password" name="currentPassword" autocomplete="current-password" required></label><button class="button button-secondary" type="submit">Speichern</button></form></section><section class="account-section"><h3>Passwort ändern</h3>${forcePasswordChange ? '<p class="account-help">Das Admin-Reset-Passwort muss jetzt durch dein eigenes Passwort ersetzt werden.</p>' : ''}<form id="passwordForm" class="account-form account-password-form"><label class="form-field"><span>${forcePasswordChange ? 'Temporäres Passwort' : 'Aktuelles Passwort'}</span><input type="password" name="currentPassword" autocomplete="current-password" required></label><label class="form-field"><span>Neues Passwort · mindestens 12 Zeichen</span><input type="password" name="newPassword" minlength="12" maxlength="256" autocomplete="new-password" required></label><div class="account-message" id="passwordMessage" hidden></div><button class="button button-primary" type="submit">Passwort ändern</button></form></section>${forcePasswordChange ? '' : `<section class="account-section"><h3>Zwei-Faktor-Anmeldung</h3><p class="account-help">${escapeHtml(securityStatus)} Wiederherstellungscodes sind Einmalcodes und müssen sicher abgelegt werden.</p><label class="form-field security-reauth"><span>Aktuelles Passwort zur Bestätigung</span><input id="securityPassword" type="password" autocomplete="current-password"></label><div class="security-actions"><button class="button button-secondary" id="enableTotp">${security.totpEnabled ? 'OTP ist aktiv' : 'OTP einrichten'}</button><button class="button button-secondary" id="enablePasskey">${security.passkeys.length ? 'Weiteren Passkey hinzufügen' : 'Passkey einrichten'}</button>${security.totpEnabled || security.passkeys.length ? '<button class="button button-danger" id="disableSecurity">Sicherheitsfaktoren deaktivieren</button>' : ''}</div><div class="account-message" id="securityMessage" hidden></div></section>${adminSection}`}</div>`;
+  $('#emailForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const email = data.get('email');
+    try { const result = await api('/api/auth/change-email', { method: 'POST', body: JSON.stringify({ email, currentPassword: data.get('currentPassword') }) }); state.user = result.user; toast('E-Mail-Adresse gespeichert.'); if (forceEmail && !forcePasswordChange) modalRoot.innerHTML = ''; }
+    catch (error) { toast(error.message, 'error'); }
+  });
+  $('#passwordForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const message = $('#passwordMessage');
+    try {
+      const result = await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: data.get('currentPassword'), newPassword: data.get('newPassword') }) });
+      state.user = result.user;
+      if (forceEmail && !state.user.email) openAccountModal(false, true);
+      else modalRoot.innerHTML = '';
+      toast('Passwort wurde geändert.');
+    } catch (error) { message.textContent = error.message; message.hidden = false; }
+  });
+  $('#enableTotp')?.addEventListener('click', async event => {
+    if (security.totpEnabled) return;
+    try {
+      const setup = await api('/api/auth/totp/setup', { method: 'POST', body: JSON.stringify({ currentPassword: $('#securityPassword')?.value || '' }) });
+      $('#accountModalContent').innerHTML = `<section class="account-section"><h3>Authenticator verbinden</h3><p class="account-help">Scanne den QR-Link in deiner Authenticator-App oder trage den Schlüssel manuell ein.</p><a class="otp-uri" href="${escapeHtml(setup.otpauth)}">Authenticator öffnen</a><div class="otp-secret">${escapeHtml(setup.secret)}</div><form id="totpConfirmForm" class="account-form"><label class="form-field"><span>Sechsstelliger Code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label><div class="account-message" id="totpMessage" hidden></div><button class="button button-primary" type="submit">Code prüfen</button></form></section>`;
+      $('#totpConfirmForm').addEventListener('submit', async formEvent => {
+        formEvent.preventDefault();
+        try { const result = await api('/api/auth/totp/prepare-enable', { method: 'POST', body: JSON.stringify({ code: new FormData(formEvent.currentTarget).get('code') }) }); showRecoveryConfirmation(result.codes, 'totp', forcePasswordChange); }
+        catch (error) { const box = $('#totpMessage'); box.textContent = error.message; box.hidden = false; }
+      });
+    } catch (error) { const box = $('#securityMessage'); box.textContent = error.message; box.hidden = false; }
+  });
+  $('#enablePasskey')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try {
+      const options = await api('/api/auth/passkeys/register/options', { method: 'POST', body: JSON.stringify({ currentPassword: $('#securityPassword')?.value || '' }) });
+      const credential = await startRegistration({ optionsJSON: options });
+      const result = await api('/api/auth/passkeys/register/verify', { method: 'POST', body: JSON.stringify(credential) });
+      showRecoveryConfirmation(result.codes, 'passkey', forcePasswordChange);
+    } catch (error) { const box = $('#securityMessage'); box.textContent = error.message; box.hidden = false; event.currentTarget.disabled = false; }
+  });
+  $('#disableSecurity')?.addEventListener('click', () => {
+    modalRoot.innerHTML = `<div class="modal-backdrop"><form class="modal-card" id="disableSecurityForm"><div class="modal-top"><div><div class="eyebrow">SICHERHEITSFAKTOREN</div><h2>OTP und Passkeys deaktivieren</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><p class="account-help">Bestätige mit deinem Passwort und einem OTP- oder Wiederherstellungscode.</p><label class="form-field"><span>Aktuelles Passwort</span><input type="password" name="password" autocomplete="current-password" required></label><label class="form-field"><span>OTP- oder Wiederherstellungscode</span><input name="code" autocomplete="one-time-code" required></label><div class="account-message" id="disableError" hidden></div><div class="modal-footer"><button type="button" class="button button-secondary modal-cancel">Abbrechen</button><button class="button button-danger" type="submit">Deaktivieren</button></div></form></div>`;
+    $('#disableSecurityForm').querySelector('.modal-close').addEventListener('click', () => openAccountModal());
+    $('#disableSecurityForm').querySelector('.modal-cancel').addEventListener('click', () => openAccountModal());
+    $('#disableSecurityForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const values = new FormData(event.currentTarget);
+      try { await api('/api/auth/security/disable', { method: 'POST', body: JSON.stringify({ password: values.get('password'), code: values.get('code') }) }); toast('Zusätzliche Anmeldefaktoren wurden deaktiviert.'); openAccountModal(); }
+      catch (error) { const box = $('#disableError'); box.textContent = error.message; box.hidden = false; }
+    });
+  });
+  $('#adminResetList')?.querySelectorAll('form').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const values = new FormData(form);
+    const password = values.get('password');
+    const adminPassword = values.get('adminPassword');
+    try { await api(`/api/admin/users/${encodeURIComponent(form.dataset.user)}/reset-password`, { method: 'POST', body: JSON.stringify({ password, adminPassword }) }); toast('Passwort zurückgesetzt. Beim nächsten Login muss es geändert werden.'); form.reset(); }
+    catch (error) { toast(error.message, 'error'); }
+  }));
+}
+
+function showRecoveryConfirmation(codes, kind, forcePasswordChange = false) {
+  const modalRoot = $('#modalRoot');
+  if (!modalRoot) return;
+  modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-card recovery-modal"><div class="modal-top"><div><div class="eyebrow">WIEDERHERSTELLUNG</div><h2>Codes jetzt speichern</h2></div></div><p class="account-help">Diese Einmalcodes sind nötig, falls du den zweiten Faktor verlierst. Danach werden sie nicht erneut angezeigt.</p><div class="recovery-code-grid">${codes.map(code => `<code>${escapeHtml(code)}</code>`).join('')}</div><button class="button button-secondary recovery-download" id="downloadRecovery">Wiederherstellungscodes herunterladen</button><label class="recovery-confirm"><input type="checkbox" id="recoverySaved"><span>Ich habe diese Wiederherstellungscodes sicher gespeichert.</span></label><div class="account-message" id="recoveryMessage" hidden></div><button class="button button-primary" id="confirmRecovery" disabled>Codes gespeichert · aktivieren</button></section></div>`;
+  $('#downloadRecovery').addEventListener('click', () => {
+    const file = new Blob([`NexTerm Desk Wiederherstellungscodes\n\n${codes.join('\n')}\n\nJeder Code kann nur einmal verwendet werden. Bewahre diese Datei sicher auf.\n`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'nexterm-wiederherstellungscodes.txt'; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $('#recoverySaved').addEventListener('change', event => { $('#confirmRecovery').disabled = !event.currentTarget.checked; });
+  $('#confirmRecovery').addEventListener('click', async () => {
+    try {
+      await api(kind === 'totp' ? '/api/auth/totp/enable' : '/api/auth/passkeys/enable', { method: 'POST', body: JSON.stringify({ codesSaved: true }) });
+      toast('Sicherheitsfaktor aktiviert.');
+      openAccountModal(forcePasswordChange);
+    } catch (error) { const box = $('#recoveryMessage'); box.textContent = error.message; box.hidden = false; }
+  });
+}
+
 function ensureTerminal(session) {
   const terminalHost = $('#terminalHost');
   let entry = state.terminalEntries.get(session.id);
@@ -421,7 +612,7 @@ function ensureTerminal(session) {
     layer.className = 'terminal-layer';
     layer.dataset.session = session.id;
     terminalHost.append(layer);
-    const terminal = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 13, fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', lineHeight: 1.42, scrollback: 5000, allowProposedApi: true, theme: { background: '#101319', foreground: '#d6dce7', cursor: '#c1b5ff', cursorAccent: '#101319', selectionBackground: '#51446e80', black: '#242731', red: '#ff777f', green: '#61d99d', yellow: '#eacb77', blue: '#7faeff', magenta: '#c1a3ff', cyan: '#6bd5df', white: '#dce2ed', brightBlack: '#646d80', brightRed: '#ff969c', brightGreen: '#83e6b1', brightYellow: '#f5d88d', brightBlue: '#9bc0ff', brightMagenta: '#d1b9ff', brightCyan: '#8ce3ea', brightWhite: '#ffffff' } });
+    const terminal = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 13, fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', lineHeight: 1.42, scrollback: 5000, allowProposedApi: true, theme: terminalThemeFor(document.documentElement.dataset.theme) });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(layer);
@@ -642,11 +833,17 @@ function drawLineChart(canvasId, series, color, maxOverride = null) {
 }
 
 function drawCharts() {
-  drawLineChart('cpuChart', state.metrics.map(item => item.cpu), '#bcaaff', 100);
-  drawLineChart('networkChart', state.metrics.map(item => Math.max(item.network.rx || 0, item.network.tx || 0)), '#68d7ae');
+  const theme = document.documentElement.dataset.theme;
+  const chartColors = theme === 'muxxle' ? ['#ffb4ab', '#d5b5b7'] : theme === 'material-white' ? ['#6750a4', '#386a4a'] : ['#d0bcff', '#b7e4c7'];
+  drawLineChart('cpuChart', state.metrics.map(item => item.cpu), chartColors[0], 100);
+  drawLineChart('networkChart', state.metrics.map(item => Math.max(item.network.rx || 0, item.network.tx || 0)), chartColors[1]);
 }
 
 function bindEvents() {
+  $('#workspaceSwitch').addEventListener('click', toggleWorkspaceMenu);
+  $('#themeSelect').addEventListener('change', event => saveTheme(event.currentTarget.value));
+  $('#headerAvatar').addEventListener('click', () => openAccountModal());
+  $('#accountName').addEventListener('click', () => openAccountModal());
   $('#addHost').addEventListener('click', openHostModal);
   $('#headingAdd').addEventListener('click', openHostModal);
   $('#welcomeAdd').addEventListener('click', openHostModal);
@@ -680,7 +877,10 @@ function bindEvents() {
 
 async function loadWorkspace() {
   try {
-    const [hosts, sessions] = await Promise.all([api('/api/hosts'), api('/api/sessions')]);
+    const [workspaces, hosts, sessions] = await Promise.all([api('/api/workspaces'), api('/api/hosts'), api('/api/sessions')]);
+    state.workspaces = workspaces.workspaces;
+    state.activeWorkspaceId = workspaces.activeWorkspaceId;
+    renderWorkspaceButton();
     state.hosts = hosts;
     state.sessions = sessions;
     state.activeId = sessions.at(-1)?.id || null;
@@ -693,7 +893,89 @@ async function loadWorkspace() {
   }
 }
 
+function renderWorkspaceButton() {
+  const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId);
+  if (!workspace || !$('#workspaceSwitch')) return;
+  $('#workspaceName').textContent = workspace.name;
+  $('#workspaceAvatar').textContent = workspace.name.trim().slice(0, 1).toUpperCase();
+  $('#workspaceContext').textContent = isLocalInstance ? 'Lokaler Tresor' : 'Webserver-Workspace';
+}
+
+async function switchWorkspace(id) {
+  if (id === state.activeWorkspaceId) return;
+  try {
+    await api(`/api/workspaces/${encodeURIComponent(id)}/activate`, { method: 'POST', body: '{}' });
+    for (const entry of state.terminalEntries.values()) {
+      entry.resizeObserver.disconnect();
+      entry.socket.close();
+      entry.terminal.dispose();
+    }
+    state.terminalEntries.clear();
+    state.metrics = [];
+    state.metricsSession = null;
+    state.activeId = null;
+    state.sessions = [];
+    await loadWorkspace();
+    toast('Workspace gewechselt.');
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function toggleWorkspaceMenu() {
+  document.querySelector('.workspace-menu')?.remove();
+  const button = $('#workspaceSwitch');
+  button.setAttribute('aria-expanded', 'true');
+  const menu = document.createElement('div');
+  menu.className = 'workspace-menu';
+  const items = state.workspaces.map(workspace => `<button type="button" data-workspace-id="${escapeHtml(workspace.id)}" class="workspace-option ${workspace.id === state.activeWorkspaceId ? 'active' : ''}"><span>${escapeHtml(workspace.name)}</span>${workspace.id === state.activeWorkspaceId ? '<b>Aktiv</b>' : ''}</button>`).join('');
+  menu.innerHTML = `<div class="workspace-menu-label">DEINE WORKSPACES</div>${items}<div class="workspace-menu-actions"><button type="button" data-action="create">＋ Neu</button><button type="button" data-action="rename">Umbenennen</button><button type="button" data-action="delete">Löschen</button></div>`;
+  button.insertAdjacentElement('afterend', menu);
+  menu.querySelectorAll('[data-workspace-id]').forEach(item => item.addEventListener('click', () => { button.setAttribute('aria-expanded', 'false'); menu.remove(); switchWorkspace(item.dataset.workspaceId); }));
+  menu.querySelector('[data-action="create"]').addEventListener('click', async () => {
+    const name = prompt('Name für den neuen Workspace:');
+    if (!name?.trim()) return;
+    try {
+      const result = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
+      button.setAttribute('aria-expanded', 'false'); menu.remove();
+      state.activeWorkspaceId = result.activeWorkspaceId;
+      for (const entry of state.terminalEntries.values()) { entry.resizeObserver.disconnect(); entry.socket.close(); entry.terminal.dispose(); }
+      state.terminalEntries.clear(); state.sessions = []; state.activeId = null;
+      await loadWorkspace();
+      toast('Workspace erstellt.');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  menu.querySelector('[data-action="rename"]').addEventListener('click', async () => {
+    const current = state.workspaces.find(item => item.id === state.activeWorkspaceId);
+    const name = prompt('Neuer Workspace-Name:', current?.name || '');
+    if (!current || !name?.trim()) return;
+    try {
+      await api(`/api/workspaces/${encodeURIComponent(current.id)}`, { method: 'PATCH', body: JSON.stringify({ name: name.trim() }) });
+      current.name = name.trim(); renderWorkspaceButton(); menu.remove(); button.setAttribute('aria-expanded', 'false');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  menu.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+    const current = state.workspaces.find(item => item.id === state.activeWorkspaceId);
+    if (!current || !confirm(`Workspace „${current.name}“ und seine Verbindungen löschen?`)) return;
+    try {
+      await api(`/api/workspaces/${encodeURIComponent(current.id)}`, { method: 'DELETE' });
+      menu.remove(); button.setAttribute('aria-expanded', 'false');
+      for (const entry of state.terminalEntries.values()) { entry.resizeObserver.disconnect(); entry.socket.close(); entry.terminal.dispose(); }
+      state.terminalEntries.clear(); state.sessions = []; state.activeId = null;
+      await loadWorkspace();
+      toast('Workspace gelöscht.');
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  setTimeout(() => document.addEventListener('click', function dismiss(event) {
+    if (!menu.contains(event.target) && event.target !== button) { menu.remove(); button.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', dismiss); }
+  }, { once: true }), 0);
+}
+
 async function init() {
+  const resetToken = new URLSearchParams(location.search).get('reset');
+  if (resetToken) { state.passwordResetEnabled = true; showResetScreen(resetToken); return; }
+  try {
+    const status = await api('/api/auth/status');
+    state.passwordResetEnabled = Boolean(status.passwordResetEnabled);
+  } catch {}
   try {
     const user = await api('/api/auth/me');
     await mountWorkspace(user);

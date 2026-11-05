@@ -95,10 +95,10 @@ function restrictWindowNavigation(window, baseUrl) {
 
 async function createAppWindow(baseUrl) {
   appWindow = new BrowserWindow({
-    width: 1500,
-    height: 980,
-    minWidth: 900,
-    minHeight: 640,
+    width: 1680,
+    height: 1080,
+    minWidth: 1100,
+    minHeight: 720,
     backgroundColor: '#10131a',
     title: 'NexTerm Desk',
     autoHideMenuBar: true,
@@ -156,7 +156,7 @@ ipcMain.handle('launcher:local', async event => {
   let startedHere = false;
   try {
     const key = await getVaultKey();
-    const localServer = await startServer({ host: '127.0.0.1', port: 0, dataDir: APP_DATA_DIR, legacyDataDir: LEGACY_DATA_DIR, dataKey: key });
+    const localServer = await startServer({ host: 'localhost', port: 0, dataDir: APP_DATA_DIR, legacyDataDir: LEGACY_DATA_DIR, dataKey: key });
     localServerStarted = true;
     startedHere = true;
     await createAppWindow(localServer.url);
