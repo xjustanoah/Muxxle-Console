@@ -38,6 +38,16 @@ Für Webserver sind HTTPS und WebSocket-Weiterleitung erforderlich. Wenn TLS an 
 
 Für gespeicherte Konten auf einem selbst betriebenen Webserver kannst du zusätzlich einen festen 32-Byte-Schlüssel konfigurieren: einmalig mit `openssl rand -hex 32` erzeugen, sicher als `NEXTERM_DATA_KEY` im Dienst hinterlegen und bei jedem Start denselben Wert verwenden. Zusammen mit `TRUST_PROXY=1` werden Konten und Serverprofile serverseitig verschlüsselt. Geht dieser Schlüssel verloren, lässt sich der Datenbestand nicht mehr entschlüsseln.
 
+### Pelican-Startup
+
+Lege im Pelican-Git-Installer `https://github.com/xjustanoah/NexTerm.git` und den Branch `main` fest und aktiviere Auto Update. Ersetze den bisherigen langen `node -e`-Startup durch:
+
+```sh
+exec /usr/local/bin/node /home/container/pelican-start.cjs
+```
+
+Das Skript installiert Produktionsabhängigkeiten, erstellt den Datenschlüssel beim ersten Start und startet `server.js` auf Port `8081`. Wenn `AUTO_UPDATE=1` und `.git` vorhanden sind, zieht es beim Start den Branch nach und prüft danach alle 60 Sekunden auf neue Commits. Für ein privates Repository müssen Pelican-Variablen `USERNAME` und `ACCESS_TOKEN` gesetzt sein; der Token wird nur an Git weitergegeben und aus der Umgebung von NexTerm und npm entfernt. Verwende keine Zugangsdaten direkt im Startup-Befehl. Der vorhandene `.nexterm/.data-key` muss bei jedem Neustart erhalten bleiben, sonst kann der verschlüsselte Datenbestand nicht geöffnet werden.
+
 ## Webkonten, Workspaces und Anmeldung
 
 Neue Webkonten benötigen einen Anzeigenamen, Benutzernamen, eine E-Mail-Adresse und ein Passwort. Vorhandene Konten werden beim ersten Zugriff auf ein persönliches Workspace-Format migriert; gespeicherte Serverprofile bleiben dabei erhalten. Der erste Webaccount wird Admin. Auf bestehenden Installationen wird der bisher erste Account zum Admin migriert, sofern `NEXTERM_ADMIN_USERNAME` nicht auf einen anderen Benutzernamen gesetzt ist. Admins können ausschließlich temporäre Passwörter für andere Konten setzen; betroffene Nutzer müssen dieses Passwort nach der Anmeldung ändern. Der lokale Tresor verwendet ein internes Profil, das kein sichtbares Anmeldekonto darstellt.
