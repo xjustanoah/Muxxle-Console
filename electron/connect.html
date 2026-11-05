@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>NexTerm Desk · Verbindung wählen</title>
+    <link rel="stylesheet" href="connect.css" />
+    <script defer src="connect.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand"><span class="brand-mark">›_</span><span>NEXTERM<small>DESK</small></span><span class="local-pill"><i></i>DESKTOP</span></header>
+      <section class="intro"><span class="eyebrow">SICHERER SSH-WORKSPACE</span><h1>Wie möchtest<br />du starten?</h1><p>Wähle einen verschlüsselten Tresor auf diesem Gerät oder verbinde dich mit deinem NexTerm-Webserver.</p></section>
+      <section class="choices">
+        <article class="choice-card local-card">
+          <div class="choice-icon">⌑</div><div class="choice-label">PRIVAT AUF DIESEM GERÄT</div><h2>Lokaler Tresor</h2>
+          <p>Serverprofile und Kontodaten bleiben auf deinem PC und werden verschlüsselt gespeichert.</p>
+          <ul><li>AES-GCM-Datentresor</li><li>Schlüssel durch Windows geschützt</li><li>Keine Synchronisierung</li></ul>
+          <button id="localButton" class="primary-button" type="button">Lokal starten <span>→</span></button>
+        </article>
+        <article class="choice-card remote-card">
+          <div class="choice-icon">↗</div><div class="choice-label">VERBINDUNG ZU DEINEM SERVER</div><h2>Webserver</h2>
+          <p>Öffne deine NexTerm-Instanz und melde dich dort mit deinem Serverkonto an.</p>
+          <form id="remoteForm" novalidate><label for="serverUrl">Webserver-Adresse</label><input id="serverUrl" name="serverUrl" type="url" autocomplete="url" placeholder="https://ssh.example.com" spellcheck="false" required /><div class="secure-note"><span>▣</span> HTTPS wird für entfernte Server vorausgesetzt.</div><button id="remoteButton" class="secondary-button" type="submit">Webserver verbinden <span>↗</span></button></form>
+        </article>
+      </section>
+      <div id="launchMessage" class="launch-message" role="status" aria-live="polite" hidden></div>
+      <footer>Private Schlüssel und SSH-Passwörter werden nur für die jeweilige Verbindung verwendet.</footer>
+    </main>
+  </body>
+</html>

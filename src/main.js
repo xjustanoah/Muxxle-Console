@@ -1,0 +1,712 @@
+import '@xterm/xterm/css/xterm.css';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import './style.css';
+
+const icons = {
+  brand: '<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/><path d="M4 5v14"/><path d="M17 19h3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  search: '<svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4 4"/></svg>',
+  server: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="8" rx="2"/><rect x="4" y="13" width="16" height="8" rx="2"/><path d="M8 7h.01M8 17h.01M12 7h4M12 17h4"/></svg>',
+  terminal: '<svg viewBox="0 0 24 24"><path d="m4 6 6 6-6 6"/><path d="M12 18h8"/></svg>',
+  files: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5h7l2 2h8v10h-17z"/><path d="M3.5 7.5v-2h7l2 2"/></svg>',
+  chart: '<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 5-7"/></svg>',
+  home: '<svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-7h6v7"/></svg>',
+  settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.3 1-1.5 2.6-1.6-.7a7.8 7.8 0 0 1-1.7 1l-.3 1.8h-3l-.3-1.8a7.8 7.8 0 0 1-1.7-1l-1.6.7-1.5-2.6 1.4-1.1a7.5 7.5 0 0 1 0-2l-1.4-1.1 1.5-2.6 1.6.7a7.8 7.8 0 0 1 1.7-1l.3-1.8h3l.3 1.8a7.8 7.8 0 0 1 1.7 1l1.6-.7 1.5 2.6-1.4 1.1a7.5 7.5 0 0 1 0 2Z" transform="translate(-1 -1) scale(1.08)"/></svg>',
+  key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8 2 2-2 2 2 2-3 3-2-2-2 2"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11-1A4.5 4.5 0 0 0 7 18Z"/></svg>',
+  upload: '<svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M5 14v5h14v-5"/></svg>',
+  download: '<svg viewBox="0 0 24 24"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M5 14v5h14v-5"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v6h5M9 14h6M9 17h6"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
+  dots: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 11.9-3"/></svg>',
+  circle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>',
+  menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'
+};
+
+const state = {
+  user: null,
+  hosts: [], sessions: [], activeId: null, route: 'overview', query: '',
+  metrics: [], metricsSession: null, latestMetrics: null,
+  filePath: '', fileSession: null, files: [],
+  terminalEntries: new Map(), monitorTimer: null
+};
+
+const root = document.querySelector('#app');
+const isLocalInstance = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname.toLowerCase());
+const appMarkup = `
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-row"><div class="brand-mark">${icons.brand}</div><div class="brand-name">nexterm<span>DESK</span></div><button class="icon-button mobile-menu" id="mobileMenu" aria-label="Menü">${icons.menu}</button></div>
+      <button class="workspace-switch"><span class="workspace-avatar">S</span><span class="workspace-copy"><b>Persönlicher Workspace</b><small>${isLocalInstance ? 'Lokaler Tresor' : 'Webserver-Workspace'}</small></span><span class="workspace-caret">⌄</span></button>
+      <button class="add-connection" id="addHost">${icons.plus}<span>Server hinzufügen</span><kbd>⌘ K</kbd></button>
+      <label class="search-box">${icons.search}<input id="hostSearch" placeholder="Server suchen…" autocomplete="off"><kbd>/</kbd></label>
+      <div class="side-section"><div class="section-heading"><span>VERBINDUNGEN</span><span id="hostCount" class="count-pill">0</span></div><div id="hostList" class="host-list"></div></div>
+      <div class="side-spacer"></div>
+      <div class="sidebar-bottom">
+        <div class="local-secure">${icons.lock}<span><b>${isLocalInstance ? 'Lokal verschlüsselt' : 'Webserver-Konto'}</b><small>SSH-Zugänge bleiben flüchtig</small></span><i></i></div>
+        <div class="profile-row"><div class="profile-avatar" id="accountAvatar">S</div><div class="profile-copy"><b id="accountName">Lokales Konto</b><small id="accountUsername">Persönliches Konto</small></div><button class="logout-button" id="logoutButton">Abmelden</button></div>
+      </div>
+    </aside>
+    <main class="main-area">
+      <header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><button class="help-button" id="helpButton">Hilfe</button><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
+      <div class="page-content">
+        <div class="page-heading"><div><div class="eyebrow" id="pageEyebrow">DEIN SERVER-WORKSPACE</div><h1 id="pageTitle">Alles an einem Ort.</h1><p id="pageSubtitle">Verbinde dich sicher mit deinen Servern und behalte den Überblick.</p></div><div class="heading-actions"><button class="button button-secondary" id="quickTerminal" disabled>${icons.terminal}Terminal öffnen</button><button class="button button-primary" id="headingAdd">${icons.plus}Server verbinden</button></div></div>
+        <div class="route-tabs" id="routeTabs">
+          <button class="route-tab active" data-route="overview">${icons.home}<span>Übersicht</span></button>
+          <button class="route-tab" data-route="terminal">${icons.terminal}<span>Terminal</span><span id="termTabDot" class="tab-live-dot"></span></button>
+          <button class="route-tab" data-route="files">${icons.files}<span>Dateien</span></button>
+          <button class="route-tab" data-route="monitoring">${icons.chart}<span>Monitoring</span></button>
+          <div class="tabs-spacer"></div><div class="connection-indicator" id="connectionIndicator"><span></span>Keine aktive Verbindung</div>
+        </div>
+
+        <section class="route-view active" id="view-overview">
+          <div class="welcome-grid">
+            <div class="welcome-card"><div class="welcome-content"><div class="welcome-kicker"><span class="welcome-spark">✦</span> DEIN SECURE WORKSPACE</div><h2>Ein klarer Blick.<br><em>Volle Kontrolle.</em></h2><p>SSH, Dateiübertragung und Live-Serverdaten in einem ruhigen Arbeitsbereich.</p><button class="button button-primary" id="welcomeAdd">${icons.plus}Ersten Server hinzufügen</button><div class="trust-note">${icons.shield}<span>SSH-Schlüssel-Fingerabdrücke werden geprüft</span></div></div><div class="welcome-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-core">${icons.server}<span class="art-core-dot"></span></div><div class="art-node node-a">CPU <b>24%</b></div><div class="art-node node-b"><span></span> SSH <b>AKTIV</b></div><div class="art-node node-c">${icons.files}<b>SFTP</b></div><div class="art-dots"></div></div></div>
+            <div class="overview-side"><div class="overview-stat-card"><div class="stat-label">GESPEICHERTE SERVER <span>${icons.server}</span></div><div class="stat-number" id="overviewHostCount">0</div><div class="stat-foot"><span class="stat-accent"></span>Alle Verbindungen an einem Ort</div></div><div class="overview-stat-card"><div class="stat-label">AKTIVE SITZUNGEN <span>${icons.terminal}</span></div><div class="stat-number" id="overviewSessionCount">0</div><div class="stat-foot"><span class="stat-neutral"></span>Zurzeit verbundene Server</div></div><div class="quick-tip"><div class="tip-icon">${icons.key}</div><div><b>Deine Schlüssel bleiben bei dir</b><p>Private Schlüssel und Passwörter werden nur zum Verbindungsaufbau verwendet.</p></div></div></div>
+          </div>
+          <div class="section-title-row"><div><div class="eyebrow">DEINE UMGEBUNG</div><h2>Server & Verbindungen</h2></div><button class="text-button" id="overviewAdd">${icons.plus}Server hinzufügen</button></div>
+          <div class="server-cards" id="serverCards"></div>
+          <div class="feature-strip"><div class="feature-item"><span class="feature-icon purple">${icons.terminal}</span><div><b>Interaktives SSH-Terminal</b><small>Arbeite direkt auf deinem Server</small></div></div><div class="feature-item"><span class="feature-icon blue">${icons.files}</span><div><b>SFTP-Dateimanager</b><small>Ziehe Dateien sicher hin und her</small></div></div><div class="feature-item"><span class="feature-icon green">${icons.chart}</span><div><b>Live-Monitoring</b><small>CPU, RAM, Speicher und Netzwerk</small></div></div></div>
+        </section>
+
+        <section class="route-view terminal-view" id="view-terminal"><div class="terminal-toolbar"><div class="terminal-host-label"><span class="status-dot"></span><span id="terminalHostName">Kein Server verbunden</span><small id="terminalHostAddress"></small></div><div class="terminal-actions"><span class="terminal-type">SSH · xterm-256color</span><button class="icon-button" id="clearTerminal" title="Terminal leeren">${icons.refresh}</button><button class="icon-button danger-hover" id="disconnectButton" title="Verbindung trennen">${icons.close}</button></div></div><div class="terminal-stage" id="terminalHost"><div class="terminal-empty" id="terminalEmpty"><div class="empty-terminal-icon">${icons.terminal}</div><h3>Dein Terminal wartet</h3><p>Wähle links einen Server und stelle eine SSH-Verbindung her.</p><button class="button button-primary" id="terminalAdd">${icons.plus}Server hinzufügen</button></div></div><div class="terminal-footer"><span><i class="green-led"></i>UTF-8</span><span>Shell wird über SSH übertragen</span><span id="terminalSize">— × —</span></div></section>
+
+        <section class="route-view files-view" id="view-files"><div class="files-toolbar"><div class="file-location">${icons.files}<span id="fileHostName">Server auswählen</span><span class="location-divider">/</span><code id="filePathLabel">—</code></div><div class="file-actions"><button class="button button-secondary" id="refreshFiles">${icons.refresh}Aktualisieren</button><button class="button button-primary" id="uploadButton">${icons.upload}Hochladen</button><input type="file" id="filePicker" hidden></div></div><div class="file-table-wrap"><table class="file-table"><thead><tr><th>Name</th><th>Typ</th><th>Größe</th><th>Geändert</th><th></th></tr></thead><tbody id="fileTableBody"><tr><td colspan="5"><div class="inline-empty">${icons.files}<b>Keine Verbindung ausgewählt</b><span>Verbinde dich mit einem Server, um Dateien zu durchsuchen.</span></div></td></tr></tbody></table></div><div class="file-footer"><span id="fileCount">SFTP-Dateimanager</span><span>Über verschlüsselte SSH-Verbindung</span></div></section>
+
+        <section class="route-view monitor-view" id="view-monitoring"><div class="monitor-toolbar"><div><div class="eyebrow">LIVE-TELEMETRIE</div><div class="monitor-server-label"><span class="status-dot"></span><b id="monitorHostName">Server auswählen</b><span id="monitorUpdated">Warte auf Verbindung</span></div></div><div class="monitor-refresh">${icons.refresh}<span>Aktualisierung alle 3 Sekunden</span></div></div><div id="monitorEmpty" class="monitor-empty"><div class="empty-monitor-icon">${icons.chart}</div><h3>Deine Serverdaten, live.</h3><p>Verbinde dich mit einem Linux-Server, um CPU, Arbeitsspeicher, Festplatte und Netzwerk zu sehen.</p><button class="button button-primary" id="monitorAdd">${icons.plus}Server verbinden</button></div><div id="monitorDashboard" class="monitor-dashboard" hidden><div class="metric-grid"><article class="metric-card"><div class="metric-top"><span>CPU-AUSLASTUNG</span><span class="metric-icon purple">${icons.chart}</span></div><div class="metric-reading"><b id="cpuValue">—</b><span>%</span></div><div class="metric-sub" id="cpuSub">Gesamtauslastung</div><canvas class="sparkline" id="cpuChart" height="48"></canvas><div class="metric-bottom"><span><i class="legend-dot purple"></i>Auslastung</span><b id="cpuTrend">Live</b></div></article><article class="metric-card"><div class="metric-top"><span>ARBEITSSPEICHER</span><span class="metric-icon blue">${icons.server}</span></div><div class="metric-reading"><b id="memoryValue">—</b><span>%</span></div><div class="metric-sub" id="memorySub">— von — belegt</div><div class="metric-progress"><span id="memoryBar" class="blue"></span></div><div class="metric-bottom"><span><i class="legend-dot blue"></i>Verwendung</span><b id="memoryTotal">—</b></div></article><article class="metric-card"><div class="metric-top"><span>FESTPLATTE · /</span><span class="metric-icon amber">${icons.files}</span></div><div class="metric-reading"><b id="diskValue">—</b><span>%</span></div><div class="metric-sub" id="diskSub">— von — belegt</div><div class="metric-progress"><span id="diskBar" class="amber"></span></div><div class="metric-bottom"><span><i class="legend-dot amber"></i>Root-Dateisystem</span><b id="diskTotal">—</b></div></article><article class="metric-card network-card"><div class="metric-top"><span>NETZWERK · DURCHSATZ</span><span class="metric-icon green">${icons.cloud}</span></div><div class="network-readings"><div><span class="network-direction">↓ EMPFANGEN</span><b id="rxValue">—</b></div><div><span class="network-direction">↑ GESENDET</span><b id="txValue">—</b></div></div><canvas class="sparkline" id="networkChart" height="48"></canvas><div class="metric-bottom"><span><i class="legend-dot green"></i>Über alle Interfaces</span><b id="netTrend">Live</b></div></article></div><div class="monitor-note">${icons.shield}<span>Messwerte werden direkt vom Server gelesen und nicht gespeichert.</span><span class="monitor-legend"><i></i>Live-Daten</span></div></div></section>
+        <div class="upload-progress" id="uploadProgress" hidden><div class="upload-progress-icon">${icons.upload}</div><div class="upload-progress-copy"><b id="uploadName">Datei wird übertragen</b><span id="uploadPercent">0%</span></div><div class="upload-track"><span id="uploadBar"></span></div><button class="icon-button" id="cancelUpload">${icons.close}</button></div>
+      </div>
+    </main>
+  </div>
+  <div class="modal-root" id="modalRoot"></div>
+  <div class="toast-stack" id="toastStack"></div>
+`;
+root.classList.add('auth-checking');
+
+const $ = selector => document.querySelector(selector);
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+
+async function api(url, options = {}) {
+  const response = await fetch(url, { ...options, headers: { ...(options.body && !(options.body instanceof File) ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
+  if (response.status === 204) return null;
+  const contentType = response.headers.get('content-type') || '';
+  const body = contentType.includes('application/json') ? await response.json() : await response.text();
+  if (!response.ok) {
+    const error = new Error(body?.error || `Anfrage fehlgeschlagen (${response.status})`);
+    error.status = response.status;
+    error.data = body;
+    if (response.status === 401 && !url.startsWith('/api/auth/')) showAuthScreen('login', 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.');
+    throw error;
+  }
+  return body;
+}
+
+function showAuthScreen(mode = 'login', errorMessage = '') {
+  const registering = mode === 'register';
+  root.classList.remove('auth-checking');
+  root.classList.add('auth-screen');
+  root.innerHTML = `
+    <div class="auth-layout">
+      <aside class="auth-aside">
+        <div class="auth-brand"><span class="brand-mark">${icons.brand}</span><span>NEXTERM<small>DESK</small></span></div>
+        <div class="auth-pitch"><span class="auth-local-tag"><i></i> ${isLocalInstance ? 'PRIVATER SERVER-WORKSPACE' : 'VERBINDUNG ZUM WEBSERVER'}</span><h1>Deine Server.<br><em>Dein Zugang.</em></h1><p>Ein persönliches Konto für deine SSH-Verbindungen, Dateien und Live-Serverdaten.</p><div class="auth-feature-list"><div>${icons.shield}<span><b>Deine eigenen Clients</b><small>Serverprofile bleiben deinem Konto zugeordnet.</small></span></div><div>${icons.key}<span><b>Passwort oder SSH-Key</b><small>Wähle den passenden Weg für jeden Server.</small></span></div><div>${icons.lock}<span><b>${isLocalInstance ? 'Lokal auf diesem Gerät' : 'Auf deinem Webserver'}</b><small>${isLocalInstance ? 'Keine Cloud-Synchronisierung.' : 'Anmeldung mit deinem Serverkonto.'}</small></span></div></div></div>
+        <div class="auth-aside-bottom"><span>SSH · SFTP · MONITORING</span><span>${isLocalInstance ? 'LOKALER TRESOR' : 'WEBSERVER'}</span></div>
+      </aside>
+      <main class="auth-main"><section class="auth-card"><div class="auth-mobile-brand"><span class="brand-mark">${icons.brand}</span><span>NEXTERM<small>DESK</small></span></div><div class="auth-card-kicker">${registering ? 'NEUES LOKALES KONTO' : 'SICHERER ZUGANG'}</div><h2>${registering ? 'Konto anlegen' : 'Willkommen zurück'}</h2><p class="auth-card-intro">${registering ? 'Erstelle dein persönliches Konto und verwalte deine eigenen Server.' : 'Melde dich an, um deine Server und Verbindungen zu öffnen.'}</p>
+        <form id="appAuthForm" novalidate>${registering ? `<label class="form-field"><span>Anzeigename</span><input name="name" placeholder="Dein Name" autocomplete="name" maxlength="60" required></label>` : ''}<label class="form-field"><span>Benutzername</span><input name="username" placeholder="z. B. alex" autocomplete="username" minlength="3" maxlength="32" required></label><label class="form-field"><span>Passwort${registering ? ' · mindestens 12 Zeichen' : ''}</span><input name="password" type="password" placeholder="${registering ? 'Mindestens 12 Zeichen' : 'Dein Passwort'}" autocomplete="${registering ? 'new-password' : 'current-password'}" ${registering ? 'minlength="12"' : ''} maxlength="256" required></label><div class="auth-form-error" id="authError" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</div><button class="button button-primary auth-submit" id="authSubmit" type="submit">${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}</button></form>
+        <div class="auth-switch">${registering ? 'Schon ein Konto?' : 'Noch kein Konto?'} <button type="button" id="authSwitch">${registering ? 'Anmelden' : 'Konto anlegen'}</button></div><div class="auth-card-security">${icons.lock}<span>Passwörter werden nur als gesalzener Hash gespeichert. Serverzugänge gehören jeweils zu deinem Konto.</span></div>
+      </section><div class="auth-main-foot">${isLocalInstance ? 'Deine Kontodaten bleiben verschlüsselt auf diesem Gerät.' : 'Melde dich mit dem Konto dieser NexTerm-Instanz an.'}</div></main>
+    </div>`;
+
+  $('#authSwitch').addEventListener('click', () => showAuthScreen(registering ? 'login' : 'register'));
+  $('#appAuthForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const username = String(form.get('username') || '').trim();
+    const password = String(form.get('password') || '');
+    const name = String(form.get('name') || '').trim();
+    const error = $('#authError');
+    const submit = $('#authSubmit');
+    error.hidden = true;
+    if (registering && !name) { error.textContent = 'Bitte gib deinen Anzeigenamen ein.'; error.hidden = false; return; }
+    if (!username || !password) { error.textContent = 'Benutzername und Passwort sind erforderlich.'; error.hidden = false; return; }
+    if (registering && password.length < 12) { error.textContent = 'Wähle ein Passwort mit mindestens 12 Zeichen.'; error.hidden = false; return; }
+    submit.disabled = true;
+    submit.innerHTML = '<span class="spinner"></span>Wird verarbeitet…';
+    try {
+      const result = registering
+        ? await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, username, password }) })
+        : await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      await mountWorkspace(result.user);
+    } catch (authError) {
+      const currentError = $('#authError');
+      const currentSubmit = $('#authSubmit');
+      if (!currentError || !currentSubmit) return;
+      currentError.textContent = authError.message;
+      currentError.hidden = false;
+      currentSubmit.disabled = false;
+      currentSubmit.innerHTML = `${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}`;
+    }
+  });
+  setTimeout(() => $('#appAuthForm input[name="username"]')?.focus(), 30);
+}
+
+async function mountWorkspace(user) {
+  state.user = user;
+  root.classList.remove('auth-screen', 'auth-checking');
+  root.innerHTML = appMarkup;
+  $('#accountName').textContent = user.name;
+  $('#accountUsername').textContent = `@${user.username}`;
+  $('#accountAvatar').textContent = user.name.slice(0, 1).toUpperCase();
+  $('#headerAvatar').textContent = user.name.slice(0, 1).toUpperCase();
+  bindEvents();
+  await loadWorkspace();
+}
+
+async function logoutUser() {
+  try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); } catch {}
+  if (state.monitorTimer) clearInterval(state.monitorTimer);
+  for (const entry of state.terminalEntries.values()) {
+    entry.resizeObserver.disconnect();
+    entry.socket.close();
+    entry.terminal.dispose();
+  }
+  state.terminalEntries.clear();
+  state.user = null;
+  state.hosts = [];
+  state.sessions = [];
+  state.activeId = null;
+  state.metrics = [];
+  state.metricsSession = null;
+  state.latestMetrics = null;
+  state.filePath = '';
+  state.fileSession = null;
+  state.files = [];
+  state.query = '';
+  state.monitorTimer = null;
+  showAuthScreen('login', 'Du wurdest abgemeldet.');
+}
+
+function toast(message, kind = 'success') {
+  if (!$('#toastStack')) return;
+  const item = document.createElement('div');
+  item.className = `toast ${kind}`;
+  item.innerHTML = `<span class="toast-icon">${kind === 'error' ? icons.close : icons.shield}</span><span>${escapeHtml(message)}</span>`;
+  $('#toastStack').append(item);
+  setTimeout(() => { item.classList.add('leaving'); setTimeout(() => item.remove(), 220); }, 3600);
+}
+
+function sessionFor(hostId) { return state.sessions.find(session => session.host.id === hostId); }
+function activeSession() { return state.sessions.find(session => session.id === state.activeId); }
+
+function renderHosts() {
+  const query = state.query.trim().toLowerCase();
+  const hosts = state.hosts.filter(host => !query || `${host.name} ${host.host} ${host.username}`.toLowerCase().includes(query));
+  $('#hostCount').textContent = String(state.hosts.length);
+  $('#hostList').innerHTML = hosts.length ? hosts.map(host => {
+    const session = sessionFor(host.id);
+    const active = session?.id === state.activeId;
+    return `<button class="host-row ${active ? 'selected' : ''} ${session ? 'is-connected' : ''}" data-host-id="${escapeHtml(host.id)}"><span class="host-glyph">${icons.server}<i class="${session ? 'online' : ''}"></i></span><span class="host-row-copy"><b>${escapeHtml(host.name)}</b><small>${escapeHtml(host.username)}@${escapeHtml(host.host)}</small></span><span class="host-row-actions"><span class="host-state-dot ${session ? 'on' : ''}"></span>${!session ? `<span class="host-chevron">${icons.chevron}</span>` : ''}</span></button>`;
+  }).join('') : `<div class="side-empty">${query ? 'Keine Treffer.' : 'Noch keine Server gespeichert.'}</div>`;
+  $('#hostList').querySelectorAll('[data-host-id]').forEach(row => row.addEventListener('click', () => selectHost(row.dataset.hostId)));
+  renderOverview();
+}
+
+function renderOverview() {
+  $('#overviewHostCount').textContent = String(state.hosts.length).padStart(2, '0');
+  $('#overviewSessionCount').textContent = String(state.sessions.length).padStart(2, '0');
+  $('#serverCards').innerHTML = state.hosts.length ? state.hosts.map(host => {
+    const session = sessionFor(host.id);
+    return `<article class="server-card"><div class="server-card-top"><div class="server-card-avatar">${icons.server}</div><button class="icon-button host-menu-button" data-menu="${escapeHtml(host.id)}" aria-label="Serveroptionen">${icons.dots}</button></div><div class="server-card-name"><h3>${escapeHtml(host.name)}</h3><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span></div><div class="server-address">${escapeHtml(host.username)}<span>@</span>${escapeHtml(host.host)}<span>:</span>${host.port}</div><div class="server-card-meta"><span>${icons.key}${host.fingerprint ? 'Schlüssel bestätigt' : 'Fingerabdruck beim Erstkontakt'}</span><span>Port ${host.port}</span></div><div class="server-card-bottom"><button class="button ${session ? 'button-secondary' : 'button-primary'} card-connect" data-connect="${escapeHtml(host.id)}">${session ? icons.terminal : icons.arrow}${session ? 'Terminal öffnen' : 'Verbinden'}</button><button class="button icon-square" data-open-files="${escapeHtml(host.id)}" title="Dateien">${icons.files}</button><button class="button icon-square" data-open-monitor="${escapeHtml(host.id)}" title="Monitoring">${icons.chart}</button></div></article>`;
+  }).join('') : `<div class="empty-server-card"><div class="empty-server-icon">${icons.server}</div><div><b>Hier erscheinen deine Server</b><span>Füge eine Verbindung hinzu, um SSH, SFTP und Monitoring zu starten.</span></div><button class="button button-secondary" id="emptyAdd">${icons.plus}Server hinzufügen</button></div>`;
+  $('#serverCards').querySelectorAll('[data-connect]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); selectHost(button.dataset.connect); }));
+  $('#serverCards').querySelectorAll('[data-open-files]').forEach(button => button.addEventListener('click', () => selectHost(button.dataset.openFiles, 'files')));
+  $('#serverCards').querySelectorAll('[data-open-monitor]').forEach(button => button.addEventListener('click', () => selectHost(button.dataset.openMonitor, 'monitoring')));
+  $('#serverCards').querySelectorAll('[data-menu]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); openHostMenu(button.dataset.menu, button); }));
+  $('#emptyAdd')?.addEventListener('click', openHostModal);
+}
+
+function openHostMenu(hostId, button) {
+  document.querySelector('.host-popover')?.remove();
+  const host = state.hosts.find(item => item.id === hostId);
+  if (!host) return;
+  const menu = document.createElement('div');
+  menu.className = 'host-popover';
+  menu.innerHTML = `<button data-action="connect">${icons.terminal}Verbinden</button><button data-action="delete" class="delete-action">${icons.close}Server entfernen</button>`;
+  button.closest('.server-card').append(menu);
+  menu.querySelector('[data-action="connect"]').onclick = () => { menu.remove(); selectHost(hostId); };
+  menu.querySelector('[data-action="delete"]').onclick = async () => {
+    menu.remove();
+    if (!confirm(`Server „${host.name}“ aus deinen gespeicherten Verbindungen entfernen?`)) return;
+    try {
+      const session = sessionFor(hostId);
+      if (session) await disconnectSession(session.id);
+      await api(`/api/hosts/${encodeURIComponent(hostId)}`, { method: 'DELETE' });
+      state.hosts = state.hosts.filter(item => item.id !== hostId);
+      renderHosts();
+      toast('Server entfernt.');
+    } catch (error) { toast(error.message, 'error'); }
+  };
+  setTimeout(() => document.addEventListener('click', function closeMenu(event) { if (!menu.contains(event.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } }, { once: true }), 0);
+}
+
+function setRoute(route) {
+  if (!['overview', 'terminal', 'files', 'monitoring'].includes(route)) return;
+  state.route = route;
+  document.querySelectorAll('.route-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.route === route));
+  document.querySelectorAll('.route-view').forEach(view => view.classList.toggle('active', view.id === `view-${route}`));
+  const routeNames = { overview: 'ÜBERSICHT', terminal: 'TERMINAL', files: 'DATEIEN', monitoring: 'MONITORING' };
+  $('#breadcrumbName').textContent = routeNames[route];
+  updateConnectionChrome();
+  if (route === 'terminal' && activeSession()) ensureTerminal(activeSession());
+  if (route === 'files') loadFiles();
+  if (route === 'monitoring') {
+    drawCharts();
+    refreshMetrics();
+  }
+}
+
+function updateConnectionChrome() {
+  const session = activeSession();
+  const indicator = $('#connectionIndicator');
+  indicator.classList.toggle('connected', Boolean(session));
+  indicator.innerHTML = session ? `<span></span>${escapeHtml(session.host.name)} verbunden` : '<span></span>Keine aktive Verbindung';
+  $('#termTabDot').classList.toggle('visible', Boolean(session));
+  $('#quickTerminal').disabled = !session;
+  if (session) {
+    $('#terminalHostName').textContent = session.host.name;
+    $('#terminalHostAddress').textContent = `${session.host.username}@${session.host.host}`;
+    $('#fileHostName').textContent = session.host.name;
+    $('#monitorHostName').textContent = session.host.name;
+    $('#filePathLabel').textContent = state.fileSession === session.id ? state.filePath : session.home;
+  } else {
+    $('#terminalHostName').textContent = 'Kein Server verbunden';
+    $('#terminalHostAddress').textContent = '';
+    $('#fileHostName').textContent = 'Server auswählen';
+    $('#monitorHostName').textContent = 'Server auswählen';
+    $('#filePathLabel').textContent = '—';
+  }
+}
+
+async function selectHost(hostId, targetRoute = null) {
+  $('.sidebar').classList.remove('mobile-open');
+  const host = state.hosts.find(item => item.id === hostId);
+  if (!host) return;
+  const existing = sessionFor(hostId);
+  if (existing) {
+    state.activeId = existing.id;
+    if (state.metricsSession !== existing.id) resetMetrics(existing.id);
+    updateConnectionChrome();
+    renderHosts();
+    setRoute(targetRoute || 'terminal');
+    return;
+  }
+  openAuthModal(host, targetRoute);
+}
+
+function resetMetrics(sessionId) {
+  state.metricsSession = sessionId;
+  state.metrics = [];
+  state.latestMetrics = null;
+  updateMetricDisplay(null);
+  if (state.monitorTimer) clearInterval(state.monitorTimer);
+  if (sessionId) {
+    state.monitorTimer = setInterval(() => { if (state.activeId === sessionId) refreshMetrics(); }, 3000);
+    refreshMetrics();
+  } else if (state.monitorTimer) {
+    clearInterval(state.monitorTimer);
+    state.monitorTimer = null;
+  }
+}
+
+function openHostModal() {
+  $('#modalRoot').innerHTML = `<div class="modal-backdrop"><form class="modal-card" id="hostForm"><div class="modal-top"><div><div class="eyebrow">NEUE VERBINDUNG</div><h2>Server hinzufügen</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><p class="modal-description">Speichere die Verbindungsdaten. Zugangsdaten werden erst beim Verbinden abgefragt.</p><label class="form-field"><span>Bezeichnung</span><input name="name" placeholder="z. B. Production · Frankfurt" required maxlength="80" autocomplete="off"></label><div class="form-row"><label class="form-field grow"><span>Hostname oder IP-Adresse</span><input name="host" placeholder="server.example.com" required autocomplete="off" spellcheck="false"></label><label class="form-field port-field"><span>Port</span><input name="port" type="number" min="1" max="65535" value="22" required></label></div><label class="form-field"><span>Benutzername</span><input name="username" placeholder="root" required autocomplete="off" spellcheck="false"></label><div class="secure-inline">${icons.lock}<span>Deine Serverliste wird nur lokal auf diesem Gerät gespeichert.</span></div><div class="modal-footer"><button type="button" class="button button-secondary modal-cancel">Abbrechen</button><button type="submit" class="button button-primary">Server speichern${icons.arrow}</button></div></form></div>`;
+  const close = () => { $('#modalRoot').innerHTML = ''; };
+  $('#modalRoot').querySelectorAll('.modal-close, .modal-cancel, .modal-backdrop').forEach(element => element.addEventListener('click', event => { if (event.target === element || element.classList.contains('modal-close') || element.classList.contains('modal-cancel')) close(); }));
+  $('#hostForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    submit.disabled = true;
+    submit.innerHTML = '<span class="spinner"></span>Wird gespeichert…';
+    try {
+      const host = await api('/api/hosts', { method: 'POST', body: JSON.stringify({ name: form.get('name'), host: form.get('host'), port: form.get('port'), username: form.get('username') }) });
+      state.hosts.push(host);
+      renderHosts();
+      close();
+      toast('Server gespeichert. Jetzt kannst du dich verbinden.');
+      selectHost(host.id);
+    } catch (error) { toast(error.message, 'error'); submit.disabled = false; submit.innerHTML = `Server speichern${icons.arrow}`; }
+  });
+  setTimeout(() => $('#hostForm input[name="name"]')?.focus(), 60);
+}
+
+function openAuthModal(host, targetRoute) {
+  $('#modalRoot').innerHTML = `<div class="modal-backdrop"><form class="modal-card auth-modal" id="authForm"><div class="modal-top"><div><div class="eyebrow">SICHERE SSH-VERBINDUNG</div><h2>Verbinden mit ${escapeHtml(host.name)}</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><div class="auth-host"><span class="auth-host-icon">${icons.server}</span><div><b>${escapeHtml(host.username)}@${escapeHtml(host.host)}</b><small>Port ${host.port} · SSH</small></div><span class="auth-lock">${icons.lock}</span></div><div class="auth-methods"><label class="auth-method active"><input type="radio" name="method" value="password" checked><span class="auth-method-icon">${icons.lock}</span><span><b>Passwort</b><small>SSH-Passwort verwenden</small></span><i></i></label><label class="auth-method"><input type="radio" name="method" value="key"><span class="auth-method-icon">${icons.key}</span><span><b>SSH-Schlüssel</b><small>Privaten Schlüssel auswählen</small></span><i></i></label></div><div id="passwordPane" class="auth-pane"><label class="form-field"><span>Passwort für ${escapeHtml(host.username)}</span><div class="password-input"><input type="password" name="password" placeholder="SSH-Passwort" autocomplete="current-password"><button type="button" class="reveal-password">Anzeigen</button></div></label></div><div id="keyPane" class="auth-pane" hidden><label class="form-field"><span>Privater Schlüssel</span><div class="key-file-row"><input type="file" id="keyPicker" accept=".pem,.key,.ppk,id_rsa,id_ed25519,id_ecdsa" hidden><button type="button" class="button button-secondary key-choose">${icons.upload}Schlüsseldatei auswählen</button><span id="keyFileName">Keine Datei ausgewählt</span></div></label><label class="form-field"><span>Passphrase <small>(optional)</small></span><input type="password" name="passphrase" placeholder="Schlüssel-Passphrase"></label></div><div class="auth-security">${icons.shield}<span>Erstverbindungen prüfen den Server-Fingerabdruck. Zugangsdaten werden nicht gespeichert.</span></div><div class="modal-error" id="authError" hidden></div><div class="modal-footer"><button type="button" class="button button-secondary modal-cancel">Abbrechen</button><button type="submit" class="button button-primary" id="authSubmit">${icons.lock}Sicher verbinden</button></div></form></div>`;
+  const modalRoot = $('#modalRoot');
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelectorAll('.modal-close, .modal-cancel').forEach(element => element.addEventListener('click', close));
+  modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) close(); });
+  const authMethods = [...modalRoot.querySelectorAll('.auth-method')];
+  authMethods.forEach(method => method.addEventListener('click', () => {
+    authMethods.forEach(item => item.classList.toggle('active', item === method));
+    const keyMode = method.querySelector('input').value === 'key';
+    $('#passwordPane').hidden = keyMode;
+    $('#keyPane').hidden = !keyMode;
+  }));
+  $('.key-choose').addEventListener('click', () => $('#keyPicker').click());
+  $('#keyPicker').addEventListener('change', event => { $('#keyFileName').textContent = event.target.files[0]?.name || 'Keine Datei ausgewählt'; });
+  $('.reveal-password').addEventListener('click', event => {
+    const input = $('input[name="password"]');
+    input.type = input.type === 'password' ? 'text' : 'password';
+    event.currentTarget.textContent = input.type === 'password' ? 'Anzeigen' : 'Verbergen';
+  });
+  $('#authForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const method = form.get('method');
+    const submit = $('#authSubmit');
+    const errorBox = $('#authError');
+    errorBox.hidden = true;
+    let auth;
+    if (method === 'key') {
+      const keyFile = $('#keyPicker').files[0];
+      if (!keyFile) { errorBox.textContent = 'Bitte wähle zuerst eine Schlüsseldatei aus.'; errorBox.hidden = false; return; }
+      try { auth = { method, privateKey: await keyFile.text(), passphrase: form.get('passphrase') || '' }; }
+      catch { errorBox.textContent = 'Die Schlüsseldatei konnte nicht gelesen werden.'; errorBox.hidden = false; return; }
+    } else auth = { method, password: form.get('password') };
+    if (method === 'password' && !auth.password) { errorBox.textContent = 'Bitte gib dein Passwort ein.'; errorBox.hidden = false; return; }
+    const original = submit.innerHTML;
+    submit.disabled = true;
+    submit.innerHTML = '<span class="spinner"></span>Verbindung wird aufgebaut…';
+    try {
+      let result;
+      try { result = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ hostId: host.id, auth }) }); }
+      catch (connectError) {
+        if (connectError.status !== 409 || connectError.data?.error !== 'HOST_KEY') throw connectError;
+        const keyNote = connectError.data.changed ? 'Der gespeicherte Fingerabdruck hat sich geändert. Prüfe den neuen Schlüssel über einen sicheren zweiten Kanal.' : 'Dies ist der erste Kontakt zu diesem Server. Vergleiche den Fingerabdruck mit einer vertrauenswürdigen Quelle.';
+        const accepted = confirm(`${keyNote}\n\n${connectError.data.fingerprint}\n\nMöchtest du diesem Server-Schlüssel vertrauen?`);
+        if (!accepted) throw new Error('Verbindung abgebrochen. Der Server-Schlüssel wurde nicht bestätigt.');
+        result = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ hostId: host.id, auth: { ...auth, trustFingerprint: connectError.data.fingerprint } }) });
+      }
+      state.sessions.push(result);
+      state.activeId = result.id;
+      resetMetrics(result.id);
+      renderHosts();
+      updateConnectionChrome();
+      close();
+      setRoute(targetRoute || 'terminal');
+      toast(`Verbunden mit ${host.name}.`);
+    } catch (connectError) {
+      errorBox.textContent = connectError.message || 'Verbindung fehlgeschlagen.';
+      errorBox.hidden = false;
+      submit.disabled = false;
+      submit.innerHTML = original;
+    }
+  });
+}
+
+function ensureTerminal(session) {
+  const terminalHost = $('#terminalHost');
+  let entry = state.terminalEntries.get(session.id);
+  if (!entry) {
+    const layer = document.createElement('div');
+    layer.className = 'terminal-layer';
+    layer.dataset.session = session.id;
+    terminalHost.append(layer);
+    const terminal = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 13, fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', lineHeight: 1.42, scrollback: 5000, allowProposedApi: true, theme: { background: '#101319', foreground: '#d6dce7', cursor: '#c1b5ff', cursorAccent: '#101319', selectionBackground: '#51446e80', black: '#242731', red: '#ff777f', green: '#61d99d', yellow: '#eacb77', blue: '#7faeff', magenta: '#c1a3ff', cyan: '#6bd5df', white: '#dce2ed', brightBlack: '#646d80', brightRed: '#ff969c', brightGreen: '#83e6b1', brightYellow: '#f5d88d', brightBlue: '#9bc0ff', brightMagenta: '#d1b9ff', brightCyan: '#8ce3ea', brightWhite: '#ffffff' } });
+    const fit = new FitAddon();
+    terminal.loadAddon(fit);
+    terminal.open(layer);
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(`${wsProtocol}//${location.host}/terminal?id=${encodeURIComponent(session.id)}`);
+    socket.binaryType = 'arraybuffer';
+    socket.onopen = () => { fit.fit(); socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows })); terminal.focus(); };
+    socket.onmessage = event => {
+      let data = event.data;
+      if (typeof data === 'string' && data.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'closed') { terminal.write('\r\n\x1b[90m[Verbindung geschlossen]\x1b[0m\r\n'); return; }
+        } catch {}
+      }
+      if (data instanceof ArrayBuffer) data = new TextDecoder().decode(data);
+      terminal.write(data);
+    };
+    socket.onclose = () => { if (state.sessions.some(item => item.id === session.id)) $('#terminalHostName').classList.add('connection-lost'); };
+    terminal.onData(data => { if (socket.readyState === WebSocket.OPEN) socket.send(new TextEncoder().encode(data)); });
+    const resizeObserver = new ResizeObserver(() => {
+      if (state.activeId !== session.id || state.route !== 'terminal') return;
+      fit.fit();
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      $('#terminalSize').textContent = `${terminal.cols} × ${terminal.rows}`;
+    });
+    resizeObserver.observe(terminalHost);
+    entry = { layer, terminal, fit, socket, resizeObserver };
+    state.terminalEntries.set(session.id, entry);
+  }
+  terminalHost.querySelectorAll('.terminal-layer').forEach(layer => { layer.hidden = layer.dataset.session !== session.id; });
+  $('#terminalEmpty').hidden = true;
+  $('#terminalHostName').classList.remove('connection-lost');
+  requestAnimationFrame(() => { entry.fit.fit(); entry.terminal.focus(); $('#terminalSize').textContent = `${entry.terminal.cols} × ${entry.terminal.rows}`; });
+}
+
+async function disconnectSession(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session) return;
+  try { await api(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }); } catch {}
+  state.sessions = state.sessions.filter(item => item.id !== sessionId);
+  const entry = state.terminalEntries.get(sessionId);
+  if (entry) { entry.resizeObserver.disconnect(); entry.terminal.dispose(); entry.layer.remove(); state.terminalEntries.delete(sessionId); }
+  if (state.activeId === sessionId) {
+    state.activeId = state.sessions.at(-1)?.id || null;
+    resetMetrics(state.activeId);
+    if (state.route !== 'overview' && !state.activeId) setRoute('overview');
+  }
+  renderHosts();
+  updateConnectionChrome();
+}
+
+function remoteJoin(base, name) { return `${base === '/' ? '' : base.replace(/\/+$/, '')}/${name.replace(/^\/+/, '')}` || '/'; }
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1000) return `${Math.round(bytes)} B`;
+  const units = ['kB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1000, unit = 0;
+  while (value >= 1000 && unit < units.length - 1) { value /= 1000; unit++; }
+  return `${value < 10 ? value.toFixed(1) : value.toFixed(0)} ${units[unit]}`;
+}
+function formatDate(seconds) {
+  if (!seconds) return '—';
+  return new Intl.DateTimeFormat('de-AT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(seconds * 1000));
+}
+
+async function loadFiles() {
+  const session = activeSession();
+  const body = $('#fileTableBody');
+  if (!session) {
+    body.innerHTML = `<tr><td colspan="5"><div class="inline-empty">${icons.files}<b>Keine Verbindung ausgewählt</b><span>Verbinde dich mit einem Server, um Dateien zu durchsuchen.</span></div></td></tr>`;
+    $('#fileCount').textContent = 'SFTP-Dateimanager';
+    return;
+  }
+  if (state.fileSession !== session.id) { state.fileSession = session.id; state.filePath = session.home || '/'; }
+  $('#filePathLabel').textContent = state.filePath;
+  body.innerHTML = `<tr><td colspan="5"><div class="inline-loading"><span class="spinner"></span>Dateien werden geladen…</div></td></tr>`;
+  try {
+    const listing = await api(`/api/sessions/${encodeURIComponent(session.id)}/files?path=${encodeURIComponent(state.filePath)}`);
+    state.files = listing.files;
+    state.filePath = listing.path;
+    $('#filePathLabel').textContent = state.filePath;
+    $('#fileCount').textContent = `${listing.files.length} Einträge`;
+    const rows = [];
+    if (listing.path !== '/') rows.push(`<tr class="parent-row"><td><button class="file-name-button" data-parent="${escapeHtml(listing.parent)}"><span class="file-icon parent-icon">${icons.folder}</span><span>..</span></button></td><td>Übergeordnet</td><td>—</td><td>—</td><td></td></tr>`);
+    for (const file of listing.files) {
+      const fullPath = remoteJoin(listing.path, file.name);
+      rows.push(`<tr><td><button class="file-name-button" ${file.type === 'directory' ? `data-directory="${escapeHtml(fullPath)}"` : ''}><span class="file-icon ${file.type}">${file.type === 'directory' ? icons.folder : icons.file}</span><span>${escapeHtml(file.name)}</span></button></td><td>${file.type === 'directory' ? 'Ordner' : 'Datei'}</td><td>${file.type === 'directory' ? '—' : formatBytes(file.size)}</td><td>${formatDate(file.modified)}</td><td>${file.type === 'file' ? `<a class="file-action" href="/api/sessions/${encodeURIComponent(session.id)}/download?path=${encodeURIComponent(fullPath)}" title="Herunterladen">${icons.download}</a>` : ''}</td></tr>`);
+    }
+    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="5"><div class="inline-empty">${icons.folder}<b>Dieser Ordner ist leer</b><span>Ziehe eine Datei hierher oder nutze „Hochladen“.</span></div></td></tr>`;
+    body.querySelectorAll('[data-directory]').forEach(button => button.addEventListener('click', () => { state.filePath = button.dataset.directory; loadFiles(); }));
+    body.querySelectorAll('[data-parent]').forEach(button => button.addEventListener('click', () => { state.filePath = button.dataset.parent; loadFiles(); }));
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="5"><div class="inline-empty error-empty">${icons.close}<b>Ordner konnte nicht geladen werden</b><span>${escapeHtml(error.message)}</span></div></td></tr>`;
+    $('#fileCount').textContent = 'SFTP-Fehler';
+  }
+}
+
+async function beginUpload(files) {
+  const session = activeSession();
+  if (!session) { toast('Verbinde dich zuerst mit einem Server.', 'error'); return; }
+  const uploadFiles = [...files];
+  if (!uploadFiles.length) return;
+  const progress = $('#uploadProgress');
+  progress.hidden = false;
+  let succeeded = 0;
+  let lastError = '';
+  for (let index = 0; index < uploadFiles.length; index++) {
+    const file = uploadFiles[index];
+    const target = remoteJoin(state.filePath || session.home || '/', file.name);
+    const ok = await new Promise(resolve => {
+      const request = new XMLHttpRequest();
+      state.currentUpload = request;
+      $('#uploadName').textContent = uploadFiles.length > 1 ? `${file.name} · ${index + 1}/${uploadFiles.length}` : `Übertrage ${file.name}`;
+      $('#uploadPercent').textContent = '0%';
+      $('#uploadBar').style.width = '0%';
+      request.open('POST', `/api/sessions/${encodeURIComponent(session.id)}/upload?path=${encodeURIComponent(target)}`);
+      request.setRequestHeader('Content-Type', 'application/octet-stream');
+      request.upload.onprogress = event => {
+        if (!event.lengthComputable) return;
+        const percent = Math.round(event.loaded / event.total * 100);
+        $('#uploadPercent').textContent = `${percent}%`;
+        $('#uploadBar').style.width = `${percent}%`;
+      };
+      request.onload = () => {
+        state.currentUpload = null;
+        if (request.status >= 200 && request.status < 300) resolve(true);
+        else {
+          try { lastError = JSON.parse(request.responseText).error || 'Übertragung fehlgeschlagen.'; }
+          catch { lastError = 'Übertragung fehlgeschlagen.'; }
+          resolve(false);
+        }
+      };
+      request.onerror = () => { state.currentUpload = null; lastError = 'Netzwerkfehler bei der Übertragung.'; resolve(false); };
+      request.onabort = () => { state.currentUpload = null; lastError = 'Übertragung abgebrochen.'; resolve(false); };
+      request.send(file);
+    });
+    if (ok) succeeded++;
+  }
+  progress.hidden = true;
+  state.currentUpload = null;
+  if (succeeded) { toast(`${succeeded} ${succeeded === 1 ? 'Datei' : 'Dateien'} übertragen.`); loadFiles(); }
+  if (lastError) toast(lastError, 'error');
+}
+
+async function refreshMetrics() {
+  const session = activeSession();
+  if (!session) { updateMetricDisplay(null); return; }
+  try {
+    const metric = await api(`/api/sessions/${encodeURIComponent(session.id)}/metrics`);
+    if (state.activeId !== session.id) return;
+    state.latestMetrics = metric;
+    state.metrics.push(metric);
+    if (state.metrics.length > 60) state.metrics.shift();
+    $('#monitorEmpty').hidden = true;
+    $('#monitorDashboard').hidden = false;
+    $('#monitorUpdated').textContent = `Aktualisiert ${new Intl.DateTimeFormat('de-AT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(metric.at))}`;
+    updateMetricDisplay(metric);
+    drawCharts();
+  } catch (error) {
+    if (state.activeId !== session.id) return;
+    $('#monitorEmpty').hidden = false;
+    $('#monitorDashboard').hidden = true;
+    $('#monitorEmpty').innerHTML = `<div class="empty-monitor-icon">${icons.chart}</div><h3>Monitoring derzeit nicht verfügbar</h3><p>${escapeHtml(error.message)} Die Live-Werte benötigen ein Linux-System mit /proc und df.</p><button class="button button-secondary" id="retryMetrics">${icons.refresh}Erneut versuchen</button>`;
+    $('#retryMetrics').addEventListener('click', refreshMetrics);
+  }
+}
+
+function updateMetricDisplay(metric) {
+  if (!metric) {
+    $('#cpuValue').textContent = '—'; $('#memoryValue').textContent = '—'; $('#diskValue').textContent = '—';
+    $('#memorySub').textContent = '— von — belegt'; $('#diskSub').textContent = '— von — belegt';
+    $('#memoryBar').style.width = '0%'; $('#diskBar').style.width = '0%'; $('#rxValue').textContent = '—'; $('#txValue').textContent = '—';
+    return;
+  }
+  $('#cpuValue').textContent = metric.cpu == null ? '—' : metric.cpu.toFixed(1);
+  $('#cpuSub').textContent = metric.cpu == null ? 'Erste Messung läuft…' : 'Gesamtauslastung';
+  $('#memoryValue').textContent = metric.memory.percent.toFixed(1);
+  $('#memorySub').textContent = `${formatBytes(metric.memory.used)} von ${formatBytes(metric.memory.total)} belegt`;
+  $('#memoryBar').style.width = `${Math.min(100, metric.memory.percent)}%`;
+  $('#memoryTotal').textContent = formatBytes(metric.memory.total);
+  $('#diskValue').textContent = metric.disk.percent.toFixed(1);
+  $('#diskSub').textContent = `${formatBytes(metric.disk.used)} von ${formatBytes(metric.disk.total)} belegt`;
+  $('#diskBar').style.width = `${Math.min(100, metric.disk.percent)}%`;
+  $('#diskTotal').textContent = formatBytes(metric.disk.total);
+  $('#rxValue').textContent = metric.network.rx == null ? '—' : `${formatBytes(metric.network.rx)}/s`;
+  $('#txValue').textContent = metric.network.tx == null ? '—' : `${formatBytes(metric.network.tx)}/s`;
+}
+
+function drawLineChart(canvasId, series, color, maxOverride = null) {
+  const canvas = $(`#${canvasId}`);
+  if (!canvas || !canvas.offsetWidth) return;
+  const ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
+  const context = canvas.getContext('2d');
+  context.scale(ratio, ratio);
+  context.clearRect(0, 0, width, height);
+  const values = series.filter(Number.isFinite);
+  if (values.length < 2) return;
+  const max = maxOverride || Math.max(1, ...values) * 1.15;
+  context.beginPath();
+  values.forEach((value, index) => {
+    const x = index / (values.length - 1) * width;
+    const y = height - 4 - (Math.min(value, max) / max) * (height - 8);
+    if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+  });
+  context.strokeStyle = color;
+  context.lineWidth = 1.7;
+  context.lineJoin = 'round';
+  context.lineCap = 'round';
+  context.stroke();
+  const last = values.at(-1);
+  const lastY = height - 4 - (Math.min(last, max) / max) * (height - 8);
+  context.beginPath(); context.arc(width, lastY, 2.2, 0, Math.PI * 2); context.fillStyle = color; context.fill();
+}
+
+function drawCharts() {
+  drawLineChart('cpuChart', state.metrics.map(item => item.cpu), '#bcaaff', 100);
+  drawLineChart('networkChart', state.metrics.map(item => Math.max(item.network.rx || 0, item.network.tx || 0)), '#68d7ae');
+}
+
+function bindEvents() {
+  $('#addHost').addEventListener('click', openHostModal);
+  $('#headingAdd').addEventListener('click', openHostModal);
+  $('#welcomeAdd').addEventListener('click', openHostModal);
+  $('#overviewAdd').addEventListener('click', openHostModal);
+  $('#terminalAdd').addEventListener('click', openHostModal);
+  $('#monitorAdd').addEventListener('click', openHostModal);
+  $('#hostSearch').addEventListener('input', event => { state.query = event.target.value; renderHosts(); });
+  $('#routeTabs').addEventListener('click', event => { const tab = event.target.closest('[data-route]'); if (tab) setRoute(tab.dataset.route); });
+  $('#quickTerminal').addEventListener('click', () => setRoute('terminal'));
+  $('#refreshFiles').addEventListener('click', loadFiles);
+  $('#uploadButton').addEventListener('click', () => $('#filePicker').click());
+  $('#filePicker').addEventListener('change', event => { beginUpload(event.target.files); event.target.value = ''; });
+  const dropZone = $('.file-table-wrap');
+  dropZone.addEventListener('dragenter', event => { event.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragover', event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'; });
+  dropZone.addEventListener('dragleave', event => { if (!dropZone.contains(event.relatedTarget)) dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', event => { event.preventDefault(); dropZone.classList.remove('drag-over'); beginUpload(event.dataTransfer?.files || []); });
+  $('#cancelUpload').addEventListener('click', () => state.currentUpload?.abort());
+  $('#disconnectButton').addEventListener('click', () => { const session = activeSession(); if (session) disconnectSession(session.id).then(() => toast('Verbindung getrennt.')); });
+  $('#clearTerminal').addEventListener('click', () => { const entry = state.terminalEntries.get(state.activeId); entry?.terminal.clear(); entry?.terminal.focus(); });
+  $('#helpButton').addEventListener('click', () => toast('Füge einen Server hinzu und verbinde dich per Passwort oder privatem SSH-Schlüssel.'));
+  $('#logoutButton').addEventListener('click', logoutUser);
+  $('#mobileMenu').addEventListener('click', () => $('.sidebar').classList.toggle('mobile-open'));
+  document.addEventListener('keydown', event => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openHostModal(); }
+    if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { event.preventDefault(); $('#hostSearch').focus(); }
+    if (event.key === 'Escape') $('#modalRoot').innerHTML = '';
+  });
+  window.addEventListener('resize', () => { const entry = state.terminalEntries.get(state.activeId); if (entry && state.route === 'terminal') { entry.fit.fit(); drawCharts(); } });
+}
+
+async function loadWorkspace() {
+  try {
+    const [hosts, sessions] = await Promise.all([api('/api/hosts'), api('/api/sessions')]);
+    state.hosts = hosts;
+    state.sessions = sessions;
+    state.activeId = sessions.at(-1)?.id || null;
+    renderHosts();
+    updateConnectionChrome();
+    resetMetrics(state.activeId);
+  } catch (error) {
+    if (error.status === 401) return;
+    toast(`Lokaler SSH-Dienst nicht erreichbar: ${error.message}`, 'error');
+  }
+}
+
+async function init() {
+  try {
+    const user = await api('/api/auth/me');
+    await mountWorkspace(user);
+  } catch (error) {
+    if (error.status === 401) {
+      try {
+        const status = await api('/api/auth/status');
+        showAuthScreen(status.hasAccounts ? 'login' : 'register');
+      } catch (statusError) {
+        showAuthScreen('login', `Lokaler Dienst nicht erreichbar: ${statusError.message}`);
+      }
+    } else showAuthScreen('login', error.message);
+  }
+}
+
+init();

@@ -1,0 +1,40 @@
+* { box-sizing: border-box; }
+:root { color-scheme: dark; font-family: Inter, "Segoe UI", Arial, sans-serif; background: #10131a; color: #e9e7f0; }
+body { margin: 0; min-width: 600px; min-height: 100vh; background: radial-gradient(ellipse at 17% 0%, #302640 0, transparent 42%), radial-gradient(ellipse at 96% 80%, #1c2730 0, transparent 38%), #10131a; }
+.shell { width: min(100%, 760px); margin: 0 auto; padding: 30px 42px 21px; }
+.brand { display: flex; align-items: center; gap: 10px; color: #eeeaf5; font-size: 12px; font-weight: 800; letter-spacing: .13em; }
+.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #7561a5; border-radius: 9px; color: #e0d4ff; background: linear-gradient(145deg, #8a69d6, #604b9e); font: 700 20px Consolas, monospace; box-shadow: 0 5px 20px #7256bb44; }
+.brand small { margin-left: 3px; color: #9b94a8; font-size: 8px; font-weight: 500; letter-spacing: .17em; }
+.local-pill { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid #303a38; border-radius: 20px; color: #9db1a5; font: 8px Consolas, monospace; letter-spacing: .1em; }
+.local-pill i { width: 6px; height: 6px; border-radius: 50%; background: #6cd7a3; box-shadow: 0 0 8px #6cd7a3; }
+.intro { margin: 30px 0 24px; }
+.eyebrow, .choice-label { color: #a893e8; font: 9px Consolas, monospace; letter-spacing: .16em; }
+h1 { margin: 10px 0 9px; color: #f2f0f7; font-size: 33px; line-height: 1.08; font-weight: 680; letter-spacing: -.055em; }
+.intro p { max-width: 525px; margin: 0; color: #a3a7b2; font-size: 12px; line-height: 1.6; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.choice-card { min-height: 318px; padding: 18px; border: 1px solid #323541; border-radius: 10px; background: linear-gradient(145deg, #1d202a, #171a22); box-shadow: 0 14px 36px #05060a30; }
+.choice-icon { width: 31px; height: 31px; display: grid; place-items: center; margin-bottom: 13px; border-radius: 8px; color: #c2afff; background: #312a45; font-size: 18px; }
+.remote-card .choice-icon { color: #8ed9bc; background: #21372f; }
+.choice-label { font-size: 7px; color: #a899ce; }
+.remote-card .choice-label { color: #91b9a9; }
+h2 { margin: 7px 0 7px; color: #f0eef5; font-size: 17px; letter-spacing: -.035em; }
+.choice-card p { min-height: 43px; margin: 0; color: #a0a4b0; font-size: 9px; line-height: 1.55; }
+ul { display: grid; gap: 8px; margin: 13px 0 17px; padding: 0; list-style: none; color: #c1c4ce; font-size: 8px; }
+li::before { content: "✓"; margin-right: 7px; color: #80d1a3; }
+button { width: 100%; height: 35px; display: flex; align-items: center; justify-content: space-between; padding: 0 11px; border: 1px solid transparent; border-radius: 6px; color: #f4f1fb; font: 600 9px "Segoe UI", Arial, sans-serif; cursor: pointer; }
+button:disabled { opacity: .55; cursor: wait; }
+.primary-button { margin-top: auto; background: linear-gradient(110deg, #8065ca, #6852ab); box-shadow: 0 5px 17px #8065ca35; }
+.primary-button:hover:not(:disabled) { background: linear-gradient(110deg, #9277dc, #765fbd); }
+.secondary-button { margin-top: 13px; border-color: #3c554a; color: #d2eee1; background: #25362f; }
+.secondary-button:hover:not(:disabled) { background: #2c4439; }
+.choice-card form { margin-top: 9px; }
+label { display: block; margin-bottom: 6px; color: #c4c8d2; font-size: 8px; }
+input { width: 100%; height: 34px; padding: 0 9px; border: 1px solid #3a3e4b; border-radius: 5px; outline: none; color: #eeeef4; background: #11141b; font-size: 9px; }
+input:focus { border-color: #8c75cf; box-shadow: 0 0 0 2px #8c75cf22; }
+input::placeholder { color: #747b89; }
+.secure-note { margin-top: 7px; color: #8fa99b; font-size: 7px; }
+.secure-note span { margin-right: 4px; color: #85d0a7; }
+.launch-message { min-height: 30px; margin-top: 12px; padding: 8px 10px; border: 1px solid #414550; border-radius: 5px; color: #c5c1d4; background: #191c25; font-size: 8px; line-height: 1.4; }
+.launch-message.error { border-color: #694147; color: #f1b2b0; background: #2b1e23; }
+footer { margin-top: 18px; color: #767d8a; font-size: 8px; text-align: center; }
+@media (max-width: 680px) { .shell { padding: 24px 20px 18px; } .choices { grid-template-columns: 1fr; } .choice-card { min-height: auto; } .choice-card p { min-height: unset; } .primary-button { margin-top: 16px; } }
