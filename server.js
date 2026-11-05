@@ -329,7 +329,9 @@ async function importLegacyLocalFiles(legacyDir) {
 
 function publicHost(host) {
   const { id, name, host: address, port, username, fingerprint } = host;
-  return { id, name, host: address, port, username, fingerprint: fingerprint || null };
+  const description = typeof host.description === 'string' ? host.description : '';
+  const tags = Array.isArray(host.tags) ? host.tags.filter(tag => typeof tag === 'string').slice(0, 12) : [];
+  return { id, name, host: address, port, username, fingerprint: fingerprint || null, description, tags };
 }
 
 function getSession(id, res, userId, workspaceId, loginToken) {
@@ -965,7 +967,7 @@ app.use(['/api/hosts', '/api/sessions'], requireSameOrigin, requireAuth);
 app.get('/api/hosts', (req, res) => res.json((activeWorkspace(req.user).hosts || []).map(publicHost)));
 
 app.post('/api/hosts', async (req, res) => {
-  const { name, host, port, username } = req.body || {};
+  const { name, host, port, username, description = '', tags = [] } = req.body || {};
   if (![name, host, username].every(value => typeof value === 'string' && value.trim())) {
     return res.status(400).json({ error: 'Name, Host und Benutzername sind erforderlich.' });
   }
@@ -973,10 +975,14 @@ app.post('/api/hosts', async (req, res) => {
   if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
     return res.status(400).json({ error: 'Der SSH-Port muss zwischen 1 und 65535 liegen.' });
   }
+  const normalizedDescription = typeof description === 'string' ? description.trim().slice(0, 500) : '';
+  const normalizedTags = normalizeHostTags(tags);
+  if (normalizedTags === null) return res.status(400).json({ error: 'Tags müssen als Liste mit maximal zwölf Einträgen übermittelt werden.' });
   try {
     const hostProfile = {
       id: crypto.randomUUID(), name: name.trim(), host: host.trim(),
-      port: parsedPort, username: username.trim(), fingerprint: null
+      port: parsedPort, username: username.trim(), fingerprint: null,
+      description: normalizedDescription, tags: normalizedTags
     };
     const workspace = activeWorkspace(req.user);
     workspace.hosts.push(hostProfile);
@@ -985,6 +991,28 @@ app.post('/api/hosts', async (req, res) => {
   } catch {
     res.status(500).json({ error: 'Der Server konnte nicht gespeichert werden.' });
   }
+});
+
+function normalizeHostTags(tags) {
+  if (tags == null) return [];
+  if (!Array.isArray(tags) || tags.length > 12 || tags.some(tag => typeof tag !== 'string')) return null;
+  return [...new Set(tags.map(tag => tag.trim().slice(0, 32)).filter(Boolean))];
+}
+
+app.patch('/api/hosts/:id', async (req, res) => {
+  const { description = '', tags = [] } = req.body || {};
+  if (typeof description !== 'string' || description.length > 500) return res.status(400).json({ error: 'Die Beschreibung darf höchstens 500 Zeichen enthalten.' });
+  const normalizedTags = normalizeHostTags(tags);
+  if (normalizedTags === null) return res.status(400).json({ error: 'Tags müssen als Liste mit maximal zwölf Einträgen übermittelt werden.' });
+  try {
+    const workspace = activeWorkspace(req.user);
+    const hostProfile = (workspace.hosts || []).find(host => host.id === req.params.id);
+    if (!hostProfile) return res.status(404).json({ error: 'Server nicht gefunden.' });
+    hostProfile.description = description.trim();
+    hostProfile.tags = normalizedTags;
+    await writeData(req.data);
+    res.json(publicHost(hostProfile));
+  } catch { res.status(500).json({ error: 'Das Maschinenprofil konnte nicht gespeichert werden.' }); }
 });
 
 app.delete('/api/hosts/:id', async (req, res) => {
@@ -1071,6 +1099,35 @@ app.delete('/api/sessions/:id', (req, res) => {
   res.status(204).end();
 });
 
+app.post('/api/sessions/:id/reboot', (req, res) => {
+  const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
+  if (!session) return;
+  if (!session.client || session.closed) return res.status(409).json({ error: 'Die SSH-Sitzung ist nicht mehr aktiv. Stelle die Verbindung erneut her.' });
+  let settled = false;
+  let stderr = '';
+  let responseTimer;
+  const sendResponse = (status, body) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(responseTimer);
+    if (!res.headersSent) res.status(status).json(body);
+  };
+  try {
+    session.client.exec('reboot', (error, stream) => {
+      if (error) return sendResponse(422, { error: error.message || 'Der Neustartbefehl konnte nicht ausgeführt werden.' });
+      stream.stderr.on('data', chunk => { stderr = `${stderr}${chunk.toString()}`.slice(-2000); });
+      stream.on('close', code => {
+        if (code === 0 || session.closed) return sendResponse(202, { ok: true });
+        sendResponse(422, { error: stderr.trim() || 'Neustart abgelehnt. Der SSH-Benutzer braucht die nötigen Rechte.' });
+      });
+      stream.on('error', error => sendResponse(422, { error: error.message || 'Fehler beim Neustartbefehl.' }));
+      responseTimer = setTimeout(() => sendResponse(202, { ok: true }), 1200);
+    });
+  } catch (error) {
+    sendResponse(422, { error: error.message || 'Der Neustartbefehl konnte nicht ausgeführt werden.' });
+  }
+});
+
 app.get('/api/sessions/:id/files', async (req, res) => {
   const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
   if (!session) return;
@@ -1144,13 +1201,13 @@ function parseMetrics(raw) {
   const memAvailable = values.mem?.[1] || 0;
   const disk = values.disk || [0, 0, 0];
   const network = values.net || [0, 0];
-  return { total, idle, memory: { total: memTotal * 1024, used: Math.max(0, (memTotal - memAvailable) * 1024) }, disk: { total: disk[0] * 1024, used: disk[1] * 1024 }, network };
+  return { total, idle, memory: { total: memTotal * 1024, used: Math.max(0, (memTotal - memAvailable) * 1024) }, disk: { total: disk[0] * 1024, used: disk[1] * 1024 }, network, uptimeSeconds: values.uptime?.[0] ?? null };
 }
 
 app.get('/api/sessions/:id/metrics', async (req, res) => {
   const session = getSession(req.params.id, res, req.user.id, activeWorkspace(req.user).id, req.loginToken);
   if (!session) return;
-  const command = "printf 'cpu '; awk '$1==\"cpu\"{for(i=2;i<=9;i++) printf \"%s \",$i; print \"\"}' /proc/stat; awk '/MemTotal:/{t=$2}/MemAvailable:/{a=$2}END{printf \"mem %s %s\\n\",t,a}' /proc/meminfo; df -Pk / | awk 'END{printf \"disk %s %s %s\\n\",$2,$3,$4}'; awk 'NR>2{gsub(/:/,\"\",$1);if($1!=\"lo\"){rx+=$2;tx+=$10}}END{printf \"net %.0f %.0f\\n\",rx,tx}' /proc/net/dev";
+  const command = "printf 'cpu '; awk '$1==\"cpu\"{for(i=2;i<=9;i++) printf \"%s \",$i; print \"\"}' /proc/stat; awk '/MemTotal:/{t=$2}/MemAvailable:/{a=$2}END{printf \"mem %s %s\\n\",t,a}' /proc/meminfo; df -Pk / | awk 'END{printf \"disk %s %s %s\\n\",$2,$3,$4}'; awk 'NR>2{gsub(/:/,\"\",$1);if($1!=\"lo\"){rx+=$2;tx+=$10}}END{printf \"net %.0f %.0f\\n\",rx,tx}' /proc/net/dev; awk '{printf \"uptime %.0f\\n\",$1}' /proc/uptime";
   try {
     const raw = await sshExec(session.client, command);
     const now = Date.now();
@@ -1170,7 +1227,7 @@ app.get('/api/sessions/:id/metrics', async (req, res) => {
     session.previousMetrics = { ...current, at: now };
     const diskPercent = current.disk.total ? current.disk.used / current.disk.total * 100 : 0;
     const memoryPercent = current.memory.total ? current.memory.used / current.memory.total * 100 : 0;
-    res.json({ at: now, cpu, memory: { ...current.memory, percent: memoryPercent }, disk: { ...current.disk, percent: diskPercent }, network: { rx: rxRate, tx: txRate } });
+    res.json({ at: now, cpu, memory: { ...current.memory, percent: memoryPercent }, disk: { ...current.disk, percent: diskPercent }, network: { rx: rxRate, tx: txRate }, uptimeSeconds: current.uptimeSeconds });
   } catch {
     res.status(501).json({ error: 'Linux-Statistiken über /proc sind auf diesem Server nicht verfügbar.' });
   }

@@ -33,7 +33,7 @@ const icons = {
 
 const state = {
   user: null, workspaces: [], activeWorkspaceId: null, passwordResetEnabled: false,
-  hosts: [], sessions: [], activeId: null, route: 'overview', query: '',
+  hosts: [], sessions: [], activeId: null, selectedHostId: null, route: 'overview', query: '',
   metrics: [], metricsSession: null, latestMetrics: null,
   filePath: '', fileSession: null, files: [],
   terminalEntries: new Map(), monitorTimer: null
@@ -68,6 +68,7 @@ const appMarkup = `
           <button class="route-tab" data-route="terminal">${icons.terminal}<span>Terminal</span><span id="termTabDot" class="tab-live-dot"></span></button>
           <button class="route-tab" data-route="files">${icons.files}<span>Dateien</span></button>
           <button class="route-tab" data-route="monitoring">${icons.chart}<span>Monitoring</span></button>
+          <button class="route-tab" data-route="settings">${icons.settings}<span>Einstellungen</span></button>
           <div class="tabs-spacer"></div><div class="connection-indicator" id="connectionIndicator"><span></span>Keine aktive Verbindung</div>
         </div>
 
@@ -85,7 +86,8 @@ const appMarkup = `
 
         <section class="route-view files-view" id="view-files"><div class="files-toolbar"><div class="file-location">${icons.files}<span id="fileHostName">Server auswählen</span><span class="location-divider">/</span><code id="filePathLabel">—</code></div><div class="file-actions"><button class="button button-secondary" id="refreshFiles">${icons.refresh}Aktualisieren</button><button class="button button-primary" id="uploadButton">${icons.upload}Hochladen</button><input type="file" id="filePicker" hidden></div></div><div class="file-table-wrap"><table class="file-table"><thead><tr><th>Name</th><th>Typ</th><th>Größe</th><th>Geändert</th><th></th></tr></thead><tbody id="fileTableBody"><tr><td colspan="5"><div class="inline-empty">${icons.files}<b>Keine Verbindung ausgewählt</b><span>Verbinde dich mit einem Server, um Dateien zu durchsuchen.</span></div></td></tr></tbody></table></div><div class="file-footer"><span id="fileCount">SFTP-Dateimanager</span><span>Über verschlüsselte SSH-Verbindung</span></div></section>
 
-        <section class="route-view monitor-view" id="view-monitoring"><div class="monitor-toolbar"><div><div class="eyebrow">LIVE-TELEMETRIE</div><div class="monitor-server-label"><span class="status-dot"></span><b id="monitorHostName">Server auswählen</b><span id="monitorUpdated">Warte auf Verbindung</span></div></div><div class="monitor-refresh">${icons.refresh}<span>Aktualisierung alle 3 Sekunden</span></div></div><div id="monitorEmpty" class="monitor-empty"><div class="empty-monitor-icon">${icons.chart}</div><h3>Deine Serverdaten, live.</h3><p>Verbinde dich mit einem Linux-Server, um CPU, Arbeitsspeicher, Festplatte und Netzwerk zu sehen.</p><button class="button button-primary" id="monitorAdd">${icons.plus}Server verbinden</button></div><div id="monitorDashboard" class="monitor-dashboard" hidden><div class="metric-grid"><article class="metric-card"><div class="metric-top"><span>CPU-AUSLASTUNG</span><span class="metric-icon purple">${icons.chart}</span></div><div class="metric-reading"><b id="cpuValue">—</b><span>%</span></div><div class="metric-sub" id="cpuSub">Gesamtauslastung</div><canvas class="sparkline" id="cpuChart" height="48"></canvas><div class="metric-bottom"><span><i class="legend-dot purple"></i>Auslastung</span><b id="cpuTrend">Live</b></div></article><article class="metric-card"><div class="metric-top"><span>ARBEITSSPEICHER</span><span class="metric-icon blue">${icons.server}</span></div><div class="metric-reading"><b id="memoryValue">—</b><span>%</span></div><div class="metric-sub" id="memorySub">— von — belegt</div><div class="metric-progress"><span id="memoryBar" class="blue"></span></div><div class="metric-bottom"><span><i class="legend-dot blue"></i>Verwendung</span><b id="memoryTotal">—</b></div></article><article class="metric-card"><div class="metric-top"><span>FESTPLATTE · /</span><span class="metric-icon amber">${icons.files}</span></div><div class="metric-reading"><b id="diskValue">—</b><span>%</span></div><div class="metric-sub" id="diskSub">— von — belegt</div><div class="metric-progress"><span id="diskBar" class="amber"></span></div><div class="metric-bottom"><span><i class="legend-dot amber"></i>Root-Dateisystem</span><b id="diskTotal">—</b></div></article><article class="metric-card network-card"><div class="metric-top"><span>NETZWERK · DURCHSATZ</span><span class="metric-icon green">${icons.cloud}</span></div><div class="network-readings"><div><span class="network-direction">↓ EMPFANGEN</span><b id="rxValue">—</b></div><div><span class="network-direction">↑ GESENDET</span><b id="txValue">—</b></div></div><canvas class="sparkline" id="networkChart" height="48"></canvas><div class="metric-bottom"><span><i class="legend-dot green"></i>Über alle Interfaces</span><b id="netTrend">Live</b></div></article></div><div class="monitor-note">${icons.shield}<span>Messwerte werden direkt vom Server gelesen und nicht gespeichert.</span><span class="monitor-legend"><i></i>Live-Daten</span></div></div></section>
+        <section class="route-view monitor-view" id="view-monitoring"><div class="monitor-toolbar"><div><div class="eyebrow">LIVE-TELEMETRIE</div><div class="monitor-server-label"><span class="status-dot"></span><b id="monitorHostName">Server auswählen</b><span id="monitorUpdated">Warte auf Verbindung</span></div></div><div class="monitor-toolbar-right"><div class="uptime-chip"><span>LAUFZEIT</span><b id="uptimeValue">—</b></div><div class="monitor-refresh">${icons.refresh}<span>Aktualisierung alle 3 Sekunden</span></div></div></div><div id="monitorEmpty" class="monitor-empty"><div class="empty-monitor-icon">${icons.chart}</div><h3>Deine Serverdaten, live.</h3><p>Verbinde dich mit einem Linux-Server, um CPU, Arbeitsspeicher, Festplatte, Netzwerk und Laufzeit zu sehen.</p><button class="button button-primary" id="monitorAdd">${icons.plus}Server verbinden</button></div><div id="monitorDashboard" class="monitor-dashboard" hidden><div class="metric-grid"><article class="metric-card"><div class="metric-top"><span>CPU-AUSLASTUNG</span><span class="metric-icon purple">${icons.chart}</span></div><div class="metric-reading"><b id="cpuValue">—</b><span>%</span></div><div class="metric-sub" id="cpuSub">Gesamtauslastung</div><canvas class="sparkline" id="cpuChart" height="48"></canvas><div class="metric-bottom"><span><i class="legend-dot purple"></i>Auslastung</span><b id="cpuTrend">Live</b></div></article><article class="metric-card"><div class="metric-top"><span>ARBEITSSPEICHER</span><span class="metric-icon blue">${icons.server}</span></div><div class="metric-reading"><b id="memoryValue">—</b><span>%</span></div><div class="metric-sub" id="memorySub">— von — belegt</div><div class="metric-progress"><span id="memoryBar" class="blue"></span></div><div class="metric-bottom"><span><i class="legend-dot blue"></i>Verwendung</span><b id="memoryTotal">—</b></div></article><article class="metric-card"><div class="metric-top"><span>FESTPLATTE · /</span><span class="metric-icon amber">${icons.files}</span></div><div class="metric-reading"><b id="diskValue">—</b><span>%</span></div><div class="metric-sub" id="diskSub">— von — belegt</div><div class="metric-progress"><span id="diskBar" class="amber"></span></div><div class="metric-bottom"><span><i class="legend-dot amber"></i>Root-Dateisystem</span><b id="diskTotal">—</b></div></article><article class="metric-card network-card"><div class="metric-top"><span>NETZWERK · DURCHSATZ</span><span class="metric-icon green">${icons.cloud}</span></div><div class="network-readings"><div><span class="network-direction">↓ EMPFANGEN</span><b id="rxValue">—</b></div><div><span class="network-direction">↑ GESENDET</span><b id="txValue">—</b></div></div><canvas class="sparkline" id="networkChart" height="48"></canvas><div class="metric-bottom"><span><i class="legend-dot green"></i>Über alle Interfaces</span><b id="netTrend">Live</b></div></article></div><div class="monitor-note">${icons.shield}<span>Messwerte werden direkt vom Server gelesen und nicht gespeichert.</span><span class="monitor-legend"><i></i>Live-Daten</span></div></div></section>
+        <section class="route-view settings-view" id="view-settings"><div class="settings-page-heading"><div><div class="eyebrow">SERVER-PROFIL</div><h2>Einstellungen</h2><p>Beschreibungen und Tags helfen dir, deine Maschinen zu organisieren. Hier kannst du außerdem einen Neustart auslösen.</p></div></div><div id="hostSettingsContent"></div></section>
         <div class="upload-progress" id="uploadProgress" hidden><div class="upload-progress-icon">${icons.upload}</div><div class="upload-progress-copy"><b id="uploadName">Datei wird übertragen</b><span id="uploadPercent">0%</span></div><div class="upload-track"><span id="uploadBar"></span></div><button class="icon-button" id="cancelUpload">${icons.close}</button></div>
       </div>
     </main>
@@ -291,6 +293,7 @@ async function logoutUser() {
   state.hosts = [];
   state.sessions = [];
   state.activeId = null;
+  state.selectedHostId = null;
   state.metrics = [];
   state.metricsSession = null;
   state.latestMetrics = null;
@@ -316,11 +319,11 @@ function activeSession() { return state.sessions.find(session => session.id === 
 
 function renderHosts() {
   const query = state.query.trim().toLowerCase();
-  const hosts = state.hosts.filter(host => !query || `${host.name} ${host.host} ${host.username}`.toLowerCase().includes(query));
+  const hosts = state.hosts.filter(host => !query || `${host.name} ${host.host} ${host.username} ${host.description || ''} ${(host.tags || []).join(' ')}`.toLowerCase().includes(query));
   $('#hostCount').textContent = String(state.hosts.length);
   $('#hostList').innerHTML = hosts.length ? hosts.map(host => {
     const session = sessionFor(host.id);
-    const active = session?.id === state.activeId;
+    const active = host.id === state.selectedHostId || session?.id === state.activeId;
     return `<div class="host-row ${active ? 'selected' : ''} ${session ? 'is-connected' : ''}"><button class="host-row-main" data-host-id="${escapeHtml(host.id)}"><span class="host-glyph">${icons.server}<i class="${session ? 'online' : ''}"></i></span><span class="host-row-copy"><b>${escapeHtml(host.name)}</b><small>${escapeHtml(host.username)}@${escapeHtml(host.host)}</small></span><span class="host-row-actions"><span class="host-state-dot ${session ? 'on' : ''}"></span>${!session ? `<span class="host-chevron">${icons.chevron}</span>` : ''}</span></button><button type="button" class="host-row-menu" data-menu="${escapeHtml(host.id)}" aria-label="Optionen für ${escapeHtml(host.name)}">${icons.dots}</button></div>`;
   }).join('') : `<div class="side-empty">${query ? 'Keine Treffer.' : 'Noch keine Server gespeichert.'}</div>`;
   $('#hostList').querySelectorAll('[data-host-id]').forEach(row => row.addEventListener('click', () => selectHost(row.dataset.hostId)));
@@ -333,7 +336,8 @@ function renderOverview() {
   $('#overviewSessionCount').textContent = String(state.sessions.length).padStart(2, '0');
   $('#serverCards').innerHTML = state.hosts.length ? state.hosts.map(host => {
     const session = sessionFor(host.id);
-    return `<article class="server-card"><div class="server-card-top"><div class="server-card-avatar">${icons.server}</div><button class="icon-button host-menu-button" data-menu="${escapeHtml(host.id)}" aria-label="Serveroptionen">${icons.dots}</button></div><div class="server-card-name"><h3>${escapeHtml(host.name)}</h3><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span></div><div class="server-address">${escapeHtml(host.username)}<span>@</span>${escapeHtml(host.host)}<span>:</span>${host.port}</div><div class="server-card-meta"><span>${icons.key}${host.fingerprint ? 'Schlüssel bestätigt' : 'Fingerabdruck beim Erstkontakt'}</span><span>Port ${host.port}</span></div><div class="server-card-bottom"><button class="button ${session ? 'button-secondary' : 'button-primary'} card-connect" data-connect="${escapeHtml(host.id)}">${session ? icons.terminal : icons.arrow}${session ? 'Terminal öffnen' : 'Verbinden'}</button><button class="button icon-square" data-open-files="${escapeHtml(host.id)}" title="Dateien">${icons.files}</button><button class="button icon-square" data-open-monitor="${escapeHtml(host.id)}" title="Monitoring">${icons.chart}</button></div></article>`;
+    const tags = Array.isArray(host.tags) ? host.tags : [];
+    return `<article class="server-card"><div class="server-card-top"><div class="server-card-avatar">${icons.server}</div><button class="icon-button host-menu-button" data-menu="${escapeHtml(host.id)}" aria-label="Serveroptionen">${icons.dots}</button></div><div class="server-card-name"><h3>${escapeHtml(host.name)}</h3><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span></div><div class="server-address">${escapeHtml(host.username)}<span>@</span>${escapeHtml(host.host)}<span>:</span>${host.port}</div>${host.description ? `<p class="server-card-description">${escapeHtml(host.description)}</p>` : ''}${tags.length ? `<div class="server-card-tags">${tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : ''}<div class="server-card-meta"><span>${icons.key}${host.fingerprint ? 'Schlüssel bestätigt' : 'Fingerabdruck beim Erstkontakt'}</span><span>Port ${host.port}</span></div><div class="server-card-bottom"><button class="button ${session ? 'button-secondary' : 'button-primary'} card-connect" data-connect="${escapeHtml(host.id)}">${session ? icons.terminal : icons.arrow}${session ? 'Terminal öffnen' : 'Verbinden'}</button><button class="button icon-square" data-open-files="${escapeHtml(host.id)}" title="Dateien">${icons.files}</button><button class="button icon-square" data-open-monitor="${escapeHtml(host.id)}" title="Monitoring">${icons.chart}</button></div></article>`;
   }).join('') : `<div class="empty-server-card"><div class="empty-server-icon">${icons.server}</div><div><b>Hier erscheinen deine Server</b><span>Füge eine Verbindung hinzu, um SSH, SFTP und Monitoring zu starten.</span></div><button class="button button-secondary" id="emptyAdd">${icons.plus}Server hinzufügen</button></div>`;
   $('#serverCards').querySelectorAll('[data-connect]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); selectHost(button.dataset.connect); }));
   $('#serverCards').querySelectorAll('[data-open-files]').forEach(button => button.addEventListener('click', () => selectHost(button.dataset.openFiles, 'files')));
@@ -348,10 +352,11 @@ function openHostMenu(hostId, button) {
   if (!host) return;
   const menu = document.createElement('div');
   menu.className = 'host-popover';
-  menu.innerHTML = `<button data-action="connect">${icons.terminal}Verbinden</button><button data-action="delete" class="delete-action">${icons.close}Server entfernen</button>`;
+  menu.innerHTML = `<button data-action="connect">${icons.terminal}Verbinden</button><button data-action="settings">${icons.settings}Einstellungen</button><button data-action="delete" class="delete-action">${icons.close}Server entfernen</button>`;
   const anchor = button.closest('.server-card, .host-row');
   anchor.append(menu);
   menu.querySelector('[data-action="connect"]').onclick = () => { menu.remove(); selectHost(hostId); };
+  menu.querySelector('[data-action="settings"]').onclick = () => { menu.remove(); selectHostProfile(hostId, 'settings'); };
   menu.querySelector('[data-action="delete"]').onclick = async () => {
     menu.remove();
     if (!confirm(`Server „${host.name}“ aus deinen gespeicherten Verbindungen entfernen?`)) return;
@@ -360,6 +365,7 @@ function openHostMenu(hostId, button) {
       if (session) await disconnectSession(session.id);
       await api(`/api/hosts/${encodeURIComponent(hostId)}`, { method: 'DELETE' });
       state.hosts = state.hosts.filter(item => item.id !== hostId);
+      if (state.selectedHostId === hostId) state.selectedHostId = state.hosts[0]?.id || null;
       renderHosts();
       toast('Server entfernt.');
     } catch (error) { toast(error.message, 'error'); }
@@ -368,11 +374,11 @@ function openHostMenu(hostId, button) {
 }
 
 function setRoute(route) {
-  if (!['overview', 'terminal', 'files', 'monitoring'].includes(route)) return;
+  if (!['overview', 'terminal', 'files', 'monitoring', 'settings'].includes(route)) return;
   state.route = route;
   document.querySelectorAll('.route-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.route === route));
   document.querySelectorAll('.route-view').forEach(view => view.classList.toggle('active', view.id === `view-${route}`));
-  const routeNames = { overview: 'ÜBERSICHT', terminal: 'TERMINAL', files: 'DATEIEN', monitoring: 'MONITORING' };
+  const routeNames = { overview: 'ÜBERSICHT', terminal: 'TERMINAL', files: 'DATEIEN', monitoring: 'MONITORING', settings: 'EINSTELLUNGEN' };
   $('#breadcrumbName').textContent = routeNames[route];
   updateConnectionChrome();
   if (route === 'terminal' && activeSession()) ensureTerminal(activeSession());
@@ -381,6 +387,7 @@ function setRoute(route) {
     drawCharts();
     refreshMetrics();
   }
+  if (route === 'settings') renderHostSettings();
 }
 
 function updateConnectionChrome() {
@@ -409,6 +416,7 @@ async function selectHost(hostId, targetRoute = null) {
   $('.sidebar').classList.remove('mobile-open');
   const host = state.hosts.find(item => item.id === hostId);
   if (!host) return;
+  state.selectedHostId = hostId;
   const existing = sessionFor(hostId);
   if (existing) {
     state.activeId = existing.id;
@@ -419,6 +427,53 @@ async function selectHost(hostId, targetRoute = null) {
     return;
   }
   openAuthModal(host, targetRoute);
+}
+
+function selectHostProfile(hostId, route = 'settings') {
+  if (!state.hosts.some(host => host.id === hostId)) return;
+  state.selectedHostId = hostId;
+  $('.sidebar').classList.remove('mobile-open');
+  renderHosts();
+  setRoute(route);
+}
+
+function renderHostSettings() {
+  const root = $('#hostSettingsContent');
+  if (!root) return;
+  const host = state.hosts.find(item => item.id === state.selectedHostId);
+  if (!host) {
+    root.innerHTML = `<div class="host-settings-empty"><div class="empty-server-icon">${icons.settings}</div><h3>Wähle eine Maschine</h3><p>Öffne das Servermenü oder die Einstellungen auf einer Serverkarte, um Beschreibung, Tags und Neustartoptionen zu verwalten.</p><button type="button" class="button button-primary" id="settingsAddHost">${icons.plus}Server hinzufügen</button></div>`;
+    $('#settingsAddHost').addEventListener('click', openHostModal);
+    return;
+  }
+  const session = sessionFor(host.id);
+  root.innerHTML = `<div class="host-settings-grid"><form class="host-settings-card" id="hostDetailsForm"><div class="settings-section-heading"><div><span class="eyebrow">MASCHINENPROFIL</span><h3>${escapeHtml(host.name)}</h3></div><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span></div><p class="settings-help">${escapeHtml(host.username)}@${escapeHtml(host.host)}:${host.port}</p><label class="form-field"><span>Beschreibung</span><textarea name="description" rows="4" maxlength="500" placeholder="Wofür wird diese Maschine verwendet?">${escapeHtml(host.description || '')}</textarea></label><label class="form-field"><span>Tags</span><input name="tags" maxlength="400" value="${escapeHtml((host.tags || []).join(', '))}" placeholder="z. B. Produktion, EU, Datenbank"><small>Mehrere Tags mit Kommas trennen (maximal 12).</small></label><div class="settings-form-footer"><span class="settings-help">Nur in diesem Workspace gespeichert.</span><button type="submit" class="button button-primary">Änderungen speichern</button></div></form><section class="host-settings-card reboot-card"><div class="settings-section-heading"><div><span class="eyebrow">WARTUNG</span><h3>Maschine neu starten</h3></div><span class="reboot-icon">${icons.refresh}</span></div><p>Sendet den Befehl <code>reboot</code> über die aktive SSH-Terminalsitzung. Die Maschine und Verbindung werden dabei neu gestartet.</p><button type="button" class="button button-danger" id="rebootHost" ${session ? '' : 'disabled'}>${icons.refresh}Jetzt neu starten</button><small>${session ? 'Die Sitzung ist verbunden. Der angemeldete SSH-Benutzer muss Neustarts ausführen dürfen.' : 'Verbinde dich zuerst mit dieser Maschine über SSH.'}</small>${!session ? `<button type="button" class="button button-secondary" id="connectForSettings">${icons.terminal}SSH verbinden</button>` : ''}</section></div>`;
+  $('#hostDetailsForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    const tags = String(form.get('tags') || '').split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 12);
+    submit.disabled = true;
+    try {
+      const updated = await api(`/api/hosts/${encodeURIComponent(host.id)}`, { method: 'PATCH', body: JSON.stringify({ description: form.get('description'), tags }) });
+      state.hosts = state.hosts.map(item => item.id === updated.id ? updated : item);
+      state.sessions = state.sessions.map(item => item.host.id === updated.id ? { ...item, host: updated } : item);
+      renderHosts();
+      renderHostSettings();
+      toast('Maschinenprofil gespeichert.');
+    } catch (error) { toast(error.message, 'error'); submit.disabled = false; }
+  });
+  $('#rebootHost')?.addEventListener('click', async event => {
+    const reboot = event.currentTarget;
+    const currentSession = sessionFor(host.id);
+    if (!currentSession || !confirm(`Maschine „${host.name}“ jetzt mit dem Befehl reboot neu starten?`)) return;
+    reboot.disabled = true;
+    try {
+      await api(`/api/sessions/${encodeURIComponent(currentSession.id)}/reboot`, { method: 'POST', body: '{}' });
+      toast('Neustartbefehl ans SSH-Terminal gesendet. Die Sitzung kann abbrechen.');
+    } catch (error) { toast(error.message, 'error'); reboot.disabled = false; }
+  });
+  $('#connectForSettings')?.addEventListener('click', () => selectHost(host.id, 'settings'));
 }
 
 function resetMetrics(sessionId) {
@@ -437,7 +492,7 @@ function resetMetrics(sessionId) {
 }
 
 function openHostModal() {
-  $('#modalRoot').innerHTML = `<div class="modal-backdrop"><form class="modal-card" id="hostForm"><div class="modal-top"><div><div class="eyebrow">NEUE VERBINDUNG</div><h2>Server hinzufügen</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><p class="modal-description">Speichere die Verbindungsdaten. Zugangsdaten werden erst beim Verbinden abgefragt.</p><label class="form-field"><span>Bezeichnung</span><input name="name" placeholder="z. B. Production · Frankfurt" required maxlength="80" autocomplete="off"></label><div class="form-row"><label class="form-field grow"><span>Hostname oder IP-Adresse</span><input name="host" placeholder="server.example.com" required autocomplete="off" spellcheck="false"></label><label class="form-field port-field"><span>Port</span><input name="port" type="number" min="1" max="65535" value="22" required></label></div><label class="form-field"><span>Benutzername</span><input name="username" placeholder="root" required autocomplete="off" spellcheck="false"></label><div class="secure-inline">${icons.lock}<span>Deine Serverliste wird nur lokal auf diesem Gerät gespeichert.</span></div><div class="modal-footer"><button type="button" class="button button-secondary modal-cancel">Abbrechen</button><button type="submit" class="button button-primary">Server speichern${icons.arrow}</button></div></form></div>`;
+  $('#modalRoot').innerHTML = `<div class="modal-backdrop"><form class="modal-card" id="hostForm"><div class="modal-top"><div><div class="eyebrow">NEUE VERBINDUNG</div><h2>Server hinzufügen</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><p class="modal-description">Speichere die Verbindungsdaten. Zugangsdaten werden erst beim Verbinden abgefragt.</p><label class="form-field"><span>Bezeichnung</span><input name="name" placeholder="z. B. Production · Frankfurt" required maxlength="80" autocomplete="off"></label><div class="form-row"><label class="form-field grow"><span>Hostname oder IP-Adresse</span><input name="host" placeholder="server.example.com" required autocomplete="off" spellcheck="false"></label><label class="form-field port-field"><span>Port</span><input name="port" type="number" min="1" max="65535" value="22" required></label></div><label class="form-field"><span>Benutzername</span><input name="username" placeholder="root" required autocomplete="off" spellcheck="false"></label><label class="form-field"><span>Beschreibung <small>(optional)</small></span><textarea name="description" rows="3" maxlength="500" placeholder="Wofür wird diese Maschine verwendet?"></textarea></label><label class="form-field"><span>Tags <small>(optional)</small></span><input name="tags" maxlength="400" placeholder="Produktion, EU, Datenbank"><small>Mehrere Tags mit Kommas trennen.</small></label><div class="secure-inline">${icons.lock}<span>Deine Serverliste wird verschlüsselt in diesem Workspace gespeichert.</span></div><div class="modal-footer"><button type="button" class="button button-secondary modal-cancel">Abbrechen</button><button type="submit" class="button button-primary">Server speichern${icons.arrow}</button></div></form></div>`;
   const close = () => { $('#modalRoot').innerHTML = ''; };
   $('#modalRoot').querySelectorAll('.modal-close, .modal-cancel, .modal-backdrop').forEach(element => element.addEventListener('click', event => { if (event.target === element || element.classList.contains('modal-close') || element.classList.contains('modal-cancel')) close(); }));
   $('#hostForm').addEventListener('submit', async event => {
@@ -447,7 +502,8 @@ function openHostModal() {
     submit.disabled = true;
     submit.innerHTML = '<span class="spinner"></span>Wird gespeichert…';
     try {
-      const host = await api('/api/hosts', { method: 'POST', body: JSON.stringify({ name: form.get('name'), host: form.get('host'), port: form.get('port'), username: form.get('username') }) });
+      const tags = String(form.get('tags') || '').split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 12);
+      const host = await api('/api/hosts', { method: 'POST', body: JSON.stringify({ name: form.get('name'), host: form.get('host'), port: form.get('port'), username: form.get('username'), description: form.get('description'), tags }) });
       state.hosts.push(host);
       renderHosts();
       close();
@@ -508,6 +564,7 @@ function openAuthModal(host, targetRoute) {
       }
       state.sessions.push(result);
       state.activeId = result.id;
+      state.selectedHostId = host.id;
       resetMetrics(result.id);
       renderHosts();
       updateConnectionChrome();
@@ -529,14 +586,15 @@ function openDocumentation() {
   modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-card documentation-modal" aria-labelledby="documentationTitle"><div class="modal-top"><div><div class="eyebrow">NEXTERM DESK · HANDBUCH</div><h2 id="documentationTitle">Dokumentation</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><div class="documentation-content">
     <section><h3>1. Anmeldung und Betriebsarten</h3><p>${isLocalDesktopVault ? 'Der lokale Tresor wird auf diesem Windows-Konto direkt und ohne NexTerm-Anmeldung geöffnet. Workspaces und Serverprofile bleiben in einem mit AES-GCM verschlüsselten Tresor; Windows schützt den Datenschlüssel. Für den Webserver meldest du dich weiterhin mit deinem NexTerm-Konto an.' : 'Ein Konto enthält deine eigenen Workspaces und Serverprofile. Die Desktop-App kann einen lokalen Tresor auf diesem PC oder eine NexTerm-Webserver-Instanz verwenden. Im lokalen Modus bleiben Kontodaten und Serverprofile auf diesem Gerät verschlüsselt; im Webmodus liegen sie auf der verbundenen Instanz. Die Desktop-App merkt sich beim Webmodus nur die Serveradresse.'}</p></section>
     <section><h3>2. Workspaces</h3><p>Öffne links oben den Workspace-Schalter, um einen Workspace zu wechseln, umzubenennen oder einen neuen anzulegen. Jeder Workspace hat seine eigene Serverliste. Beim Wechsel werden die aktiven SSH-Sitzungen beendet. Ein Workspace kann samt seinen Verbindungen gelöscht werden.</p></section>
-    <section><h3>3. Server hinzufügen und entfernen</h3><p>Wähle <b>Server hinzufügen</b> und trage Anzeigename, Hostname oder IP-Adresse, SSH-Port und Benutzernamen ein. Das Profil speichert keine SSH-Passwörter oder privaten Schlüssel. Zum Entfernen öffnest du beim Server in der linken Liste das Drei-Punkte-Menü und wählst <b>Server entfernen</b>. Eine aktive Sitzung wird dabei getrennt; das Profil wird aus dem aktuellen Workspace gelöscht.</p></section>
+    <section><h3>3. Serverprofile verwalten</h3><p>Beim Anlegen oder unter <b>Einstellungen</b> kannst du eine Beschreibung und bis zu zwölf Komma-getrennte Tags ergänzen. Die Daten gehören zum Serverprofil im aktuellen Workspace. Zum Entfernen öffnest du beim Server in der linken Liste das Drei-Punkte-Menü und wählst <b>Server entfernen</b>. Eine aktive Sitzung wird dabei getrennt; das Profil wird aus dem aktuellen Workspace gelöscht.</p></section>
     <section><h3>4. SSH-Verbindung</h3><p>Klicke auf einen Server und wähle die Anmeldung mit SSH-Passwort oder privatem Schlüssel. Eine Schlüsseldatei kann optional mit einer Passphrase geschützt sein. Diese Zugangsdaten werden nur für den Verbindungsaufbau verwendet und nicht im NexTerm-Profil gespeichert. Beim ersten Kontakt zeigt NexTerm den Host-Fingerabdruck. Prüfe ihn über einen vertrauenswürdigen Weg mit deinem Server ab; eine unerwartete Änderung kann auf einen falschen Server oder einen Angriff hindeuten.</p></section>
     <section><h3>5. Terminal</h3><p>Nach der Verbindung öffnet sich das SSH-Terminal. Die Terminalgröße passt sich dem Fenster an. Über die Schaltfläche zum Leeren wird nur die lokale Terminalanzeige geleert; <b>Verbindung trennen</b> beendet die SSH-Sitzung.</p></section>
     <section><h3>6. Dateien per SFTP</h3><p>Öffne <b>Dateien</b>, um Ordner auf dem verbundenen Server zu durchsuchen. Du kannst Dateien hochladen, per Drag-and-drop übertragen und Dateien über das Download-Symbol auf deinen PC laden. Die Übertragung läuft über dieselbe verschlüsselte SSH-Verbindung. Der Serverbenutzer braucht passende Datei- und Ordnerrechte.</p></section>
-    <section><h3>7. Monitoring</h3><p>Die Live-Karten zeigen CPU, RAM, Root-Dateisystem und Netzwerkdurchsatz und aktualisieren sich etwa alle drei Sekunden. Werte werden direkt vom Zielserver gelesen und in NexTerm nicht gespeichert. Die Monitoring-Abfragen benötigen derzeit ein Linux-Zielsystem mit den üblichen <code>/proc</code>-Dateien und <code>df</code>.</p></section>
-    <section><h3>8. Theme und Kontosicherheit</h3><p>Wähle oben rechts <b>Material Dark</b>, <b>Material White</b> oder <b>Muxxle</b>. ${isLocalDesktopVault ? 'Die Auswahl wird lokal im verschlüsselten Tresor auf diesem Windows-Konto gespeichert.' : 'Die Auswahl wird deinem Konto zugeordnet und bei der nächsten Anmeldung wiederhergestellt. Über dein Profil kannst du E-Mail-Adresse und Passwort ändern sowie OTP oder Passkeys einrichten. Bewahre die angezeigten Wiederherstellungscodes sicher auf: Sie sind Einmalcodes und werden nach der Einrichtung nicht erneut angezeigt. Bestätige, dass du sie gespeichert hast, bevor du OTP oder Passkey aktivierst.'}</p></section>
-    ${isLocalDesktopVault ? '' : '<section><h3>9. Admin-Nutzerverwaltung</h3><p>Admins sehen oben rechts <b>Einstellungen</b> und können dort unter <b>Users</b> ein temporäres Passwort für ein anderes Konto setzen. Dafür muss das Admin-Passwort erneut eingegeben werden. Das betroffene Konto wird abgemeldet und muss das temporäre Passwort direkt nach der nächsten Anmeldung ändern. Das eigene Passwort änderst du in deinen Kontoeinstellungen.</p></section>'}
-    <section><h3>${isLocalDesktopVault ? '9' : '10'}. Hinweise zur Serverinstanz</h3><p>Für den Zugriff über das Internet müssen HTTPS und WebSocket-Weiterleitung für <code>/terminal</code> eingerichtet sein. E-Mail-Passwort-Resets funktionieren nur, wenn der Betreiber den Mailversand serverseitig aktiviert und SMTP konfiguriert hat.${isLocalDesktopVault ? '' : ' Im lokalen Modus ist kein NexTerm-Login erforderlich.'}</p></section>
+    <section><h3>7. Monitoring und Laufzeit</h3><p>Die Live-Karten zeigen CPU, RAM, Root-Dateisystem, Netzwerkdurchsatz und die Systemlaufzeit seit dem letzten Neustart. Werte werden direkt vom Zielserver gelesen und in NexTerm nicht gespeichert. Die Monitoring-Abfragen benötigen derzeit ein Linux-Zielsystem mit den üblichen <code>/proc</code>-Dateien und <code>df</code>.</p></section>
+    <section><h3>8. Maschineneinstellungen und Neustart</h3><p>Wähle beim Server in der Übersicht oder im linken Servermenü <b>Einstellungen</b>, um Beschreibung und Tags zu ändern. Ein Neustart ist nur bei aktiver SSH-Terminalsitzung verfügbar. NexTerm sendet den einfachen Befehl <code>reboot</code> als angemeldeter SSH-Benutzer; dieser braucht dafür die nötigen Rechte. Die Verbindung kann durch den Neustart abbrechen.</p></section>
+    <section><h3>9. Theme und Kontosicherheit</h3><p>Wähle oben rechts <b>Material Dark</b>, <b>Material White</b> oder <b>Muxxle</b>. ${isLocalDesktopVault ? 'Die Auswahl wird lokal im verschlüsselten Tresor auf diesem Windows-Konto gespeichert.' : 'Die Auswahl wird deinem Konto zugeordnet und bei der nächsten Anmeldung wiederhergestellt. Über dein Profil kannst du E-Mail-Adresse und Passwort ändern sowie OTP oder Passkeys einrichten. Bewahre die angezeigten Wiederherstellungscodes sicher auf: Sie sind Einmalcodes und werden nach der Einrichtung nicht erneut angezeigt. Bestätige, dass du sie gespeichert hast, bevor du OTP oder Passkey aktivierst.'}</p></section>
+    ${isLocalDesktopVault ? '' : '<section><h3>10. Admin-Nutzerverwaltung</h3><p>Admins sehen oben rechts <b>Einstellungen</b> und können dort unter <b>Users</b> ein temporäres Passwort für ein anderes Konto setzen. Dafür muss das Admin-Passwort erneut eingegeben werden. Das betroffene Konto wird abgemeldet und muss das temporäre Passwort direkt nach der nächsten Anmeldung ändern. Das eigene Passwort änderst du in deinen Kontoeinstellungen.</p></section>'}
+    <section><h3>${isLocalDesktopVault ? '10' : '11'}. Hinweise zur Serverinstanz</h3><p>Für den Zugriff über das Internet müssen HTTPS und WebSocket-Weiterleitung für <code>/terminal</code> eingerichtet sein. E-Mail-Passwort-Resets funktionieren nur, wenn der Betreiber den Mailversand serverseitig aktiviert und SMTP konfiguriert hat.${isLocalDesktopVault ? '' : ' Im lokalen Modus ist kein NexTerm-Login erforderlich.'}</p></section>
   </div></section></div>`;
   modalRoot.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
   modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) modalRoot.innerHTML = ''; });
@@ -849,7 +907,7 @@ function updateMetricDisplay(metric) {
   if (!metric) {
     $('#cpuValue').textContent = '—'; $('#memoryValue').textContent = '—'; $('#diskValue').textContent = '—';
     $('#memorySub').textContent = '— von — belegt'; $('#diskSub').textContent = '— von — belegt';
-    $('#memoryBar').style.width = '0%'; $('#diskBar').style.width = '0%'; $('#rxValue').textContent = '—'; $('#txValue').textContent = '—';
+    $('#memoryBar').style.width = '0%'; $('#diskBar').style.width = '0%'; $('#rxValue').textContent = '—'; $('#txValue').textContent = '—'; $('#uptimeValue').textContent = '—';
     return;
   }
   $('#cpuValue').textContent = metric.cpu == null ? '—' : metric.cpu.toFixed(1);
@@ -864,6 +922,15 @@ function updateMetricDisplay(metric) {
   $('#diskTotal').textContent = formatBytes(metric.disk.total);
   $('#rxValue').textContent = metric.network.rx == null ? '—' : `${formatBytes(metric.network.rx)}/s`;
   $('#txValue').textContent = metric.network.tx == null ? '—' : `${formatBytes(metric.network.tx)}/s`;
+  $('#uptimeValue').textContent = formatUptime(metric.uptimeSeconds);
+}
+
+function formatUptime(seconds) {
+  if (!Number.isFinite(seconds)) return '—';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return days ? `${days} T · ${hours} Std` : `${hours} Std · ${minutes} Min`;
 }
 
 function drawLineChart(canvasId, series, color, maxOverride = null) {
@@ -897,8 +964,7 @@ function drawLineChart(canvasId, series, color, maxOverride = null) {
 }
 
 function drawCharts() {
-  const theme = document.documentElement.dataset.theme;
-  const chartColors = theme === 'muxxle' ? ['#ffb4ab', '#d5b5b7'] : theme === 'material-white' ? ['#6750a4', '#386a4a'] : ['#d0bcff', '#b7e4c7'];
+  const chartColors = document.documentElement.dataset.theme === 'material-white' ? ['#167c76', '#518983'] : ['#7ce9df', '#c5f4ef'];
   drawLineChart('cpuChart', state.metrics.map(item => item.cpu), chartColors[0], 100);
   drawLineChart('networkChart', state.metrics.map(item => Math.max(item.network.rx || 0, item.network.tx || 0)), chartColors[1]);
 }
@@ -952,6 +1018,7 @@ async function loadWorkspace() {
     state.hosts = hosts;
     state.sessions = sessions;
     state.activeId = sessions.at(-1)?.id || null;
+    state.selectedHostId = sessions.at(-1)?.host.id || null;
     renderHosts();
     updateConnectionChrome();
     resetMetrics(state.activeId);
@@ -1006,7 +1073,7 @@ function toggleWorkspaceMenu() {
       button.setAttribute('aria-expanded', 'false'); menu.remove();
       state.activeWorkspaceId = result.activeWorkspaceId;
       for (const entry of state.terminalEntries.values()) { entry.resizeObserver.disconnect(); entry.socket.close(); entry.terminal.dispose(); }
-      state.terminalEntries.clear(); state.sessions = []; state.activeId = null;
+      state.terminalEntries.clear(); state.sessions = []; state.activeId = null; state.selectedHostId = null;
       await loadWorkspace();
       toast('Workspace erstellt.');
     } catch (error) { toast(error.message, 'error'); }
@@ -1027,7 +1094,7 @@ function toggleWorkspaceMenu() {
       await api(`/api/workspaces/${encodeURIComponent(current.id)}`, { method: 'DELETE' });
       menu.remove(); button.setAttribute('aria-expanded', 'false');
       for (const entry of state.terminalEntries.values()) { entry.resizeObserver.disconnect(); entry.socket.close(); entry.terminal.dispose(); }
-      state.terminalEntries.clear(); state.sessions = []; state.activeId = null;
+      state.terminalEntries.clear(); state.sessions = []; state.activeId = null; state.selectedHostId = null;
       await loadWorkspace();
       toast('Workspace gelöscht.');
     } catch (error) { toast(error.message, 'error'); }
