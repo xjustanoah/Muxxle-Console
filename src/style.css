@@ -1101,6 +1101,11 @@ html[data-theme] .text-button:hover { color: var(--accent-hover); }
 
 /* Noah Muxxle brand accents, with account themes still controlling surface colors. */
 :root { --brand-teal: #7ce9df; --brand-white: #f6f8fb; }
+html[data-theme] #headerAvatar[hidden], #logoutButton[hidden] { display: none !important; }
+.local-vault-error { min-height: 100vh; display: grid; align-content: center; justify-items: center; gap: 12px; padding: 30px; color: #f6f8fb; text-align: center; background: radial-gradient(ellipse at 50% 22%, rgba(124, 233, 223, .09), transparent 42%), #06070b; }
+.local-vault-error-mark { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(124, 233, 223, .3); border-radius: 14px; color: #7ce9df; background: rgba(124, 233, 223, .1); }
+.local-vault-error h1 { max-width: 540px; margin: 0; font-size: clamp(28px, 4vw, 40px); }
+.local-vault-error p { max-width: 540px; margin: 0 0 10px; color: #a8b2c4; font-size: 14px; line-height: 1.6; }
 html[data-theme] .app-shell { background: radial-gradient(ellipse at 83% 0%, color-mix(in srgb, var(--brand-teal) 7%, transparent), transparent 34%), var(--bg); }
 html[data-theme] .brand-mark { color: #071312; background: linear-gradient(135deg, var(--brand-white), var(--brand-teal)); border-color: transparent; }
 .topbar .help-button { padding: 5px 0; white-space: nowrap; }

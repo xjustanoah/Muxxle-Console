@@ -38,6 +38,7 @@ const ACCOUNT_THEMES = new Set(['material-dark', 'material-white', 'muxxle']);
 let activeHost = DEFAULT_HOST;
 let activePort = DEFAULT_PORT;
 let serverStarted = false;
+let localDesktopMode = false;
 
 if (DATA_KEY && DATA_KEY.length !== 32) throw new Error('NEXTERM_DATA_KEY muss ein 32-Byte-Hexschlüssel sein.');
 
@@ -159,7 +160,21 @@ async function verifyAccountPassword(user, password) {
 }
 
 function publicUser(user) {
-  return { id: user.id, username: user.username, name: user.name, email: user.email || '', role: user.role || 'user', mustChangePassword: Boolean(user.mustChangePassword), theme: ACCOUNT_THEMES.has(user.theme) ? user.theme : 'material-dark' };
+  return { id: user.id, username: user.username, name: user.name, email: user.email || '', role: localDesktopMode ? 'user' : (user.role || 'user'), mustChangePassword: localDesktopMode ? false : Boolean(user.mustChangePassword), theme: ACCOUNT_THEMES.has(user.theme) ? user.theme : 'material-dark' };
+}
+
+async function ensureLocalDesktopUser() {
+  const data = await readData();
+  if (data.users.length) return data.users[0];
+  const user = {
+    id: crypto.randomUUID(), username: 'local-desktop', name: 'Lokaler Tresor', email: '', role: 'user',
+    passwordSalt: crypto.randomBytes(16).toString('hex'), passwordHash: crypto.randomBytes(64).toString('hex'),
+    theme: 'material-dark', workspaces: [{ id: crypto.randomUUID(), name: 'Mein Workspace', hosts: [] }]
+  };
+  user.activeWorkspaceId = user.workspaces[0].id;
+  data.users.push(user);
+  await writeData(data);
+  return user;
 }
 
 function activeWorkspace(user) {
@@ -865,12 +880,12 @@ app.post('/api/auth/security/disable', requireAuth, async (req, res) => {
 
 app.use('/api/admin', requireSameOrigin, requireAuth);
 app.get('/api/admin/users', (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
+  if (localDesktopMode || req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
   res.json((req.data.users || []).map(user => ({ id: user.id, username: user.username, name: user.name, email: user.email || '', role: user.role || 'user', mustChangePassword: Boolean(user.mustChangePassword) })));
 });
 
 app.post('/api/admin/users/:id/reset-password', async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
+  if (localDesktopMode || req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
   if (req.params.id === req.user.id) return res.status(400).json({ error: 'Das eigene Passwort änderst du in den Kontoeinstellungen.' });
   if (!await verifyAccountPassword(req.user, req.body?.adminPassword)) return res.status(403).json({ error: 'Bestätige das Zurücksetzen mit deinem aktuellen Admin-Passwort.' });
   const password = String(req.body?.password || '');
@@ -1233,10 +1248,12 @@ export async function startServer(options = {}) {
     DATA_KEY = Buffer.isBuffer(options.dataKey) ? Buffer.from(options.dataKey) : Buffer.from(String(options.dataKey), 'hex');
     if (DATA_KEY.length !== 32) throw new Error('Der lokale Tresorschlüssel muss 32 Byte lang sein.');
   }
+  localDesktopMode = options.localDesktop === true;
   activeHost = options.host || DEFAULT_HOST;
   activePort = options.port ?? DEFAULT_PORT;
   await importLegacyLocalFiles(options.legacyDataDir);
   await encryptExistingLocalFiles();
+  const localUser = localDesktopMode ? await ensureLocalDesktopUser() : null;
   await new Promise((resolve, reject) => {
     const onError = error => reject(error);
     server.once('error', onError);
@@ -1247,7 +1264,13 @@ export async function startServer(options = {}) {
   });
   serverStarted = true;
   const address = server.address();
-  return { host: activeHost, port: address.port, url: `http://${activeHost}:${address.port}` };
+  const result = { host: activeHost, port: address.port, url: `http://${activeHost}:${address.port}` };
+  if (localUser) {
+    const sessionToken = crypto.randomBytes(32).toString('base64url');
+    loginSessions.set(sessionToken, { userId: localUser.id, expiresAt: Number.MAX_SAFE_INTEGER, localDesktop: true });
+    result.localSessionToken = sessionToken;
+  }
+  return result;
 }
 
 export async function stopServer() {
@@ -1257,6 +1280,7 @@ export async function stopServer() {
   loginSessions.clear();
   await new Promise(resolve => server.close(resolve));
   serverStarted = false;
+  localDesktopMode = false;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

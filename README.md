@@ -29,18 +29,18 @@ npm install
 npm run dist:win
 ```
 
-Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.1-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
+Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.3-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
 
-- **Lokaler Tresor:** Die Desktop-App legt den Datenspeicher im NexTerm-App-Profil ab und verschlüsselt Konten und Serverprofile mit AES-256-GCM. Der zufällige Datenschlüssel wird über Windows DPAPI geschützt. Vorhandene Kontodaten aus `~/.nexterm` werden in den Tresor kopiert.
+- **Lokaler Tresor:** Die Desktop-App öffnet den verschlüsselten Tresor direkt, ohne NexTerm-Konto oder Loginfenster. Serverprofile, Workspaces und Einstellungen bleiben im NexTerm-App-Profil und werden mit AES-256-GCM verschlüsselt. Der zufällige Datenschlüssel wird über Windows DPAPI geschützt. Vorhandene Kontodaten aus `~/.nexterm` werden in den Tresor kopiert.
 - **Webserver:** Gib die HTTPS-Adresse deiner NexTerm-Instanz ein und melde dich dort mit dem Konto dieser Instanz an. Nur die Serveradresse wird für den nächsten Start gemerkt. Passwörter und private SSH-Schlüssel werden nicht in der Desktop-Konfiguration gespeichert.
 
 Für Webserver sind HTTPS und WebSocket-Weiterleitung erforderlich. Wenn TLS an einem Reverse Proxy endet, starte NexTerm dahinter mit `TRUST_PROXY=1`, leite den ursprünglichen Host und das HTTPS-Schema korrekt weiter und aktiviere den WebSocket-Upgrade für `/terminal`. HTTP ist in der Desktop-App nur für `localhost` erlaubt.
 
 Für gespeicherte Konten auf einem selbst betriebenen Webserver kannst du zusätzlich einen festen 32-Byte-Schlüssel konfigurieren: einmalig mit `openssl rand -hex 32` erzeugen, sicher als `NEXTERM_DATA_KEY` im Dienst hinterlegen und bei jedem Start denselben Wert verwenden. Zusammen mit `TRUST_PROXY=1` werden Konten und Serverprofile serverseitig verschlüsselt. Geht dieser Schlüssel verloren, lässt sich der Datenbestand nicht mehr entschlüsseln.
 
-## Konten, Workspaces und Anmeldung
+## Webkonten, Workspaces und Anmeldung
 
-Neue Konten benötigen einen Anzeigenamen, Benutzernamen, eine E-Mail-Adresse und ein Passwort. Vorhandene Konten werden beim ersten Zugriff auf ein persönliches Workspace-Format migriert; gespeicherte Serverprofile bleiben dabei erhalten. Der erste Account wird Admin. Auf bestehenden Installationen wird der bisher erste Account zum Admin migriert, sofern `NEXTERM_ADMIN_USERNAME` nicht auf einen anderen Benutzernamen gesetzt ist. Admins können ausschließlich temporäre Passwörter für andere Konten setzen; betroffene Nutzer müssen dieses Passwort nach der Anmeldung ändern.
+Neue Webkonten benötigen einen Anzeigenamen, Benutzernamen, eine E-Mail-Adresse und ein Passwort. Vorhandene Konten werden beim ersten Zugriff auf ein persönliches Workspace-Format migriert; gespeicherte Serverprofile bleiben dabei erhalten. Der erste Webaccount wird Admin. Auf bestehenden Installationen wird der bisher erste Account zum Admin migriert, sofern `NEXTERM_ADMIN_USERNAME` nicht auf einen anderen Benutzernamen gesetzt ist. Admins können ausschließlich temporäre Passwörter für andere Konten setzen; betroffene Nutzer müssen dieses Passwort nach der Anmeldung ändern. Der lokale Tresor verwendet ein internes Profil, das kein sichtbares Anmeldekonto darstellt.
 
 Passwortänderungen sind in den Kontoeinstellungen verfügbar. E-Mail-Passwort-Resets bleiben standardmäßig aus. Für den Versand müssen `NEXTERM_PASSWORD_RESET_ENABLED=1`, `SMTP_HOST` und `SMTP_FROM` gesetzt werden. Optional sind `SMTP_PORT` (Standard `587`), `SMTP_SECURE=1` für implizites TLS sowie `SMTP_USER` und `SMTP_PASS`. Reset-Links laufen nach 30 Minuten ab.
 

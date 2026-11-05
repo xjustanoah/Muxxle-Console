@@ -44,6 +44,7 @@ let themeSaveQueue = Promise.resolve();
 
 const root = document.querySelector('#app');
 const isLocalInstance = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname.toLowerCase());
+const isLocalDesktopVault = isLocalInstance && new URLSearchParams(location.search).get('desktop') === 'local';
 const appMarkup = `
   <div class="app-shell">
     <aside class="sidebar">
@@ -248,6 +249,12 @@ function showResetScreen(token) {
   });
 }
 
+function showLocalVaultError(message) {
+  root.classList.remove('auth-checking', 'auth-screen');
+  root.innerHTML = `<main class="local-vault-error"><div class="local-vault-error-mark">${icons.lock}</div><div class="eyebrow">WINDOWS-TRESOR</div><h1>Lokaler Tresor nicht verfügbar</h1><p>${escapeHtml(message || 'Der lokale Tresor konnte nicht geöffnet werden.')}</p><button type="button" class="button button-primary" id="retryLocalVault">Erneut versuchen</button></main>`;
+  $('#retryLocalVault').addEventListener('click', () => location.reload());
+}
+
 async function mountWorkspace(user) {
   state.user = user;
   user.theme = applyTheme(user.theme);
@@ -256,12 +263,18 @@ async function mountWorkspace(user) {
   $('#themeSelect').value = user.theme;
   $('#accountName').textContent = user.name;
   $('#accountUsername').textContent = `@${user.username}`;
+  if (isLocalDesktopVault) {
+    $('#accountName').textContent = 'Lokaler Tresor';
+    $('#accountUsername').textContent = 'Verschlüsselt auf diesem Gerät';
+    $('#headerAvatar').hidden = true;
+    $('#logoutButton').hidden = true;
+  }
   $('#accountAvatar').textContent = user.name.slice(0, 1).toUpperCase();
   $('#headerAvatar').textContent = user.name.slice(0, 1).toUpperCase();
-  $('#settingsButton').hidden = user.role !== 'admin';
+  $('#settingsButton').hidden = isLocalDesktopVault || user.role !== 'admin';
   bindEvents();
   await loadWorkspace();
-  if (user.mustChangePassword || !user.email) openAccountModal(Boolean(user.mustChangePassword), !user.email);
+  if (!isLocalDesktopVault && (user.mustChangePassword || !user.email)) openAccountModal(Boolean(user.mustChangePassword), !user.email);
 }
 
 async function logoutUser() {
@@ -514,16 +527,16 @@ function openDocumentation() {
   const modalRoot = $('#modalRoot');
   if (!modalRoot) return;
   modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-card documentation-modal" aria-labelledby="documentationTitle"><div class="modal-top"><div><div class="eyebrow">NEXTERM DESK · HANDBUCH</div><h2 id="documentationTitle">Dokumentation</h2></div><button type="button" class="icon-button modal-close" aria-label="Schließen">${icons.close}</button></div><div class="documentation-content">
-    <section><h3>1. Anmeldung und Betriebsarten</h3><p>Ein Konto enthält deine eigenen Workspaces und Serverprofile. Die Desktop-App kann einen lokalen Tresor auf diesem PC oder eine NexTerm-Webserver-Instanz verwenden. Im lokalen Modus bleiben Kontodaten und Serverprofile auf diesem Gerät verschlüsselt; im Webmodus liegen sie auf der verbundenen Instanz. Die Desktop-App merkt sich beim Webmodus nur die Serveradresse.</p></section>
+    <section><h3>1. Anmeldung und Betriebsarten</h3><p>${isLocalDesktopVault ? 'Der lokale Tresor wird auf diesem Windows-Konto direkt und ohne NexTerm-Anmeldung geöffnet. Workspaces und Serverprofile bleiben in einem mit AES-GCM verschlüsselten Tresor; Windows schützt den Datenschlüssel. Für den Webserver meldest du dich weiterhin mit deinem NexTerm-Konto an.' : 'Ein Konto enthält deine eigenen Workspaces und Serverprofile. Die Desktop-App kann einen lokalen Tresor auf diesem PC oder eine NexTerm-Webserver-Instanz verwenden. Im lokalen Modus bleiben Kontodaten und Serverprofile auf diesem Gerät verschlüsselt; im Webmodus liegen sie auf der verbundenen Instanz. Die Desktop-App merkt sich beim Webmodus nur die Serveradresse.'}</p></section>
     <section><h3>2. Workspaces</h3><p>Öffne links oben den Workspace-Schalter, um einen Workspace zu wechseln, umzubenennen oder einen neuen anzulegen. Jeder Workspace hat seine eigene Serverliste. Beim Wechsel werden die aktiven SSH-Sitzungen beendet. Ein Workspace kann samt seinen Verbindungen gelöscht werden.</p></section>
     <section><h3>3. Server hinzufügen und entfernen</h3><p>Wähle <b>Server hinzufügen</b> und trage Anzeigename, Hostname oder IP-Adresse, SSH-Port und Benutzernamen ein. Das Profil speichert keine SSH-Passwörter oder privaten Schlüssel. Zum Entfernen öffnest du beim Server in der linken Liste das Drei-Punkte-Menü und wählst <b>Server entfernen</b>. Eine aktive Sitzung wird dabei getrennt; das Profil wird aus dem aktuellen Workspace gelöscht.</p></section>
     <section><h3>4. SSH-Verbindung</h3><p>Klicke auf einen Server und wähle die Anmeldung mit SSH-Passwort oder privatem Schlüssel. Eine Schlüsseldatei kann optional mit einer Passphrase geschützt sein. Diese Zugangsdaten werden nur für den Verbindungsaufbau verwendet und nicht im NexTerm-Profil gespeichert. Beim ersten Kontakt zeigt NexTerm den Host-Fingerabdruck. Prüfe ihn über einen vertrauenswürdigen Weg mit deinem Server ab; eine unerwartete Änderung kann auf einen falschen Server oder einen Angriff hindeuten.</p></section>
     <section><h3>5. Terminal</h3><p>Nach der Verbindung öffnet sich das SSH-Terminal. Die Terminalgröße passt sich dem Fenster an. Über die Schaltfläche zum Leeren wird nur die lokale Terminalanzeige geleert; <b>Verbindung trennen</b> beendet die SSH-Sitzung.</p></section>
     <section><h3>6. Dateien per SFTP</h3><p>Öffne <b>Dateien</b>, um Ordner auf dem verbundenen Server zu durchsuchen. Du kannst Dateien hochladen, per Drag-and-drop übertragen und Dateien über das Download-Symbol auf deinen PC laden. Die Übertragung läuft über dieselbe verschlüsselte SSH-Verbindung. Der Serverbenutzer braucht passende Datei- und Ordnerrechte.</p></section>
     <section><h3>7. Monitoring</h3><p>Die Live-Karten zeigen CPU, RAM, Root-Dateisystem und Netzwerkdurchsatz und aktualisieren sich etwa alle drei Sekunden. Werte werden direkt vom Zielserver gelesen und in NexTerm nicht gespeichert. Die Monitoring-Abfragen benötigen derzeit ein Linux-Zielsystem mit den üblichen <code>/proc</code>-Dateien und <code>df</code>.</p></section>
-    <section><h3>8. Theme und Kontosicherheit</h3><p>Wähle oben rechts <b>Material Dark</b>, <b>Material White</b> oder <b>Muxxle</b>. Die Auswahl wird deinem Konto zugeordnet und bei der nächsten Anmeldung wiederhergestellt. Über dein Profil kannst du E-Mail-Adresse und Passwort ändern sowie OTP oder Passkeys einrichten. Bewahre die angezeigten Wiederherstellungscodes sicher auf: Sie sind Einmalcodes und werden nach der Einrichtung nicht erneut angezeigt. Bestätige, dass du sie gespeichert hast, bevor du OTP oder Passkey aktivierst.</p></section>
-    <section><h3>9. Admin-Nutzerverwaltung</h3><p>Admins sehen oben rechts <b>Einstellungen</b> und können dort unter <b>Users</b> ein temporäres Passwort für ein anderes Konto setzen. Dafür muss das Admin-Passwort erneut eingegeben werden. Das betroffene Konto wird abgemeldet und muss das temporäre Passwort direkt nach der nächsten Anmeldung ändern. Das eigene Passwort änderst du in deinen Kontoeinstellungen.</p></section>
-    <section><h3>10. Hinweise zur Serverinstanz</h3><p>Für den Zugriff über das Internet müssen HTTPS und WebSocket-Weiterleitung für `/terminal` eingerichtet sein. E-Mail-Passwort-Resets funktionieren nur, wenn der Betreiber den Mailversand serverseitig aktiviert und SMTP konfiguriert hat. Bei einer lokalen Desktop-Anmeldung ist ein externer Mailversand nicht automatisch verfügbar.</p></section>
+    <section><h3>8. Theme und Kontosicherheit</h3><p>Wähle oben rechts <b>Material Dark</b>, <b>Material White</b> oder <b>Muxxle</b>. ${isLocalDesktopVault ? 'Die Auswahl wird lokal im verschlüsselten Tresor auf diesem Windows-Konto gespeichert.' : 'Die Auswahl wird deinem Konto zugeordnet und bei der nächsten Anmeldung wiederhergestellt. Über dein Profil kannst du E-Mail-Adresse und Passwort ändern sowie OTP oder Passkeys einrichten. Bewahre die angezeigten Wiederherstellungscodes sicher auf: Sie sind Einmalcodes und werden nach der Einrichtung nicht erneut angezeigt. Bestätige, dass du sie gespeichert hast, bevor du OTP oder Passkey aktivierst.'}</p></section>
+    ${isLocalDesktopVault ? '' : '<section><h3>9. Admin-Nutzerverwaltung</h3><p>Admins sehen oben rechts <b>Einstellungen</b> und können dort unter <b>Users</b> ein temporäres Passwort für ein anderes Konto setzen. Dafür muss das Admin-Passwort erneut eingegeben werden. Das betroffene Konto wird abgemeldet und muss das temporäre Passwort direkt nach der nächsten Anmeldung ändern. Das eigene Passwort änderst du in deinen Kontoeinstellungen.</p></section>'}
+    <section><h3>${isLocalDesktopVault ? '9' : '10'}. Hinweise zur Serverinstanz</h3><p>Für den Zugriff über das Internet müssen HTTPS und WebSocket-Weiterleitung für <code>/terminal</code> eingerichtet sein. E-Mail-Passwort-Resets funktionieren nur, wenn der Betreiber den Mailversand serverseitig aktiviert und SMTP konfiguriert hat.${isLocalDesktopVault ? '' : ' Im lokalen Modus ist kein NexTerm-Login erforderlich.'}</p></section>
   </div></section></div>`;
   modalRoot.querySelector('.modal-close').addEventListener('click', () => { modalRoot.innerHTML = ''; });
   modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) modalRoot.innerHTML = ''; });
@@ -893,8 +906,10 @@ function drawCharts() {
 function bindEvents() {
   $('#workspaceSwitch').addEventListener('click', toggleWorkspaceMenu);
   $('#themeSelect').addEventListener('change', event => saveTheme(event.currentTarget.value));
-  $('#headerAvatar').addEventListener('click', () => openAccountModal());
-  $('#accountName').addEventListener('click', () => openAccountModal());
+  if (!isLocalDesktopVault) {
+    $('#headerAvatar').addEventListener('click', () => openAccountModal());
+    $('#accountName').addEventListener('click', () => openAccountModal());
+  }
   $('#addHost').addEventListener('click', openHostModal);
   $('#headingAdd').addEventListener('click', openHostModal);
   $('#welcomeAdd').addEventListener('click', openHostModal);
@@ -1033,6 +1048,10 @@ async function init() {
     const user = await api('/api/auth/me');
     await mountWorkspace(user);
   } catch (error) {
+    if (isLocalDesktopVault) {
+      showLocalVaultError(error.status === 401 ? 'Der automatische Tresorzugang fehlt. Starte NexTerm Desk erneut, damit Windows eine neue lokale Sitzung anlegen kann.' : error.message);
+      return;
+    }
     if (error.status === 401) {
       try {
         const status = await api('/api/auth/status');

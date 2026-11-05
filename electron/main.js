@@ -157,10 +157,19 @@ ipcMain.handle('launcher:local', async event => {
   let startedHere = false;
   try {
     const key = await getVaultKey();
-    const localServer = await startServer({ host: 'localhost', port: 0, dataDir: APP_DATA_DIR, legacyDataDir: LEGACY_DATA_DIR, dataKey: key });
+    const localServer = await startServer({ host: 'localhost', port: 0, dataDir: APP_DATA_DIR, legacyDataDir: LEGACY_DATA_DIR, dataKey: key, localDesktop: true });
     localServerStarted = true;
     startedHere = true;
-    await createAppWindow(localServer.url);
+    await session.defaultSession.cookies.set({
+      url: localServer.url,
+      name: 'nexterm_session',
+      value: localServer.localSessionToken,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'strict',
+      expirationDate: Math.floor(Date.now() / 1000) + 10 * 365 * 24 * 60 * 60
+    });
+    await createAppWindow(`${localServer.url}/?desktop=local`);
     launcherWindow?.close();
     launcherWindow = null;
     return { ok: true };
