@@ -37,10 +37,15 @@
       "output": "release"
     },
     "files": [
-      "dist/**/*",
       "server.js",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "dist"
+      }
     ],
     "win": {
       "icon": "electron/nexterm-app-icon.png",

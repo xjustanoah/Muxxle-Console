@@ -1160,12 +1160,23 @@ app.get('/api/sessions/:id/metrics', async (req, res) => {
   }
 });
 
-const distPath = path.join(ROOT, 'dist');
-try {
-  await fs.access(distPath);
+const distCandidates = [path.join(ROOT, 'dist')];
+if (process.resourcesPath) distCandidates.push(path.join(process.resourcesPath, 'dist'));
+let distPath = null;
+for (const candidate of distCandidates) {
+  try {
+    await fs.access(path.join(candidate, 'index.html'));
+    distPath = candidate;
+    break;
+  } catch {}
+}
+if (distPath) {
   app.use(express.static(distPath));
   app.get('/{*splat}', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
-} catch {}
+} else {
+  console.error('NexTerm: dist/index.html wurde nicht gefunden.');
+  app.get('/{*splat}', (_req, res) => res.status(503).type('text/plain').send('Die NexTerm-Oberfläche fehlt in dieser Installation. Bitte aktualisiere die App.'));
+}
 
 server.on('upgrade', async (request, socket, head) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || `${activeHost}:${activePort}`}`);
