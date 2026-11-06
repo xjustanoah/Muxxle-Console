@@ -5,7 +5,7 @@ import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import './style.css';
 
 const icons = {
-  brand: '<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/><path d="M4 5v14"/><path d="M17 19h3"/></svg>',
+  brand: '<img src="/favicon.png" alt="" />',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   search: '<svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4 4"/></svg>',
   server: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="8" rx="2"/><rect x="4" y="13" width="16" height="8" rx="2"/><path d="M8 7h.01M8 17h.01M12 7h4M12 17h4"/></svg>',
@@ -121,7 +121,7 @@ async function api(url, options = {}) {
 function terminalThemeFor(theme) {
   const common = { black: '#242731', red: '#ff777f', green: '#61d99d', yellow: '#eacb77', blue: '#7faeff', magenta: '#7ce9df', cyan: '#6bd5df', white: '#dce2ed', brightBlack: '#646d80', brightRed: '#ff969c', brightGreen: '#83e6b1', brightYellow: '#f5d88d', brightBlue: '#9bc0ff', brightMagenta: '#b7f3ed', brightCyan: '#8ce3ea', brightWhite: '#ffffff' };
   const palettes = {
-    'material-dark': { background: '#14181b', foreground: '#e6edee', cursor: '#7ce9df', cursorAccent: '#14181b', selectionBackground: '#7ce9df55', magenta: '#7ce9df', brightMagenta: '#b7f3ed' },
+    'material-dark': { background: '#080c25', foreground: '#eef2ff', cursor: '#8c83ff', cursorAccent: '#080c25', selectionBackground: '#8c83ff55', magenta: '#8c83ff', brightMagenta: '#b5a0ff', blue: '#6176ff', brightBlue: '#91a0ff', cyan: '#44e2ff', brightCyan: '#8deeff' },
     'material-white': { background: '#ffffff', foreground: '#172020', cursor: '#167c76', cursorAccent: '#ffffff', selectionBackground: '#167c7633', magenta: '#167c76', brightMagenta: '#2f9e97', white: '#172020', brightWhite: '#38343b' },
     muxxle: { background: '#140b0c', foreground: '#f2dfe0', cursor: '#7ce9df', cursorAccent: '#140b0c', selectionBackground: '#7ce9df55', magenta: '#7ce9df', brightMagenta: '#b7f3ed' }
   };

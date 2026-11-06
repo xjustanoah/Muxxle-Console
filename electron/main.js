@@ -99,7 +99,8 @@ async function createAppWindow(baseUrl) {
     height: 960,
     minWidth: 1160,
     minHeight: 740,
-    backgroundColor: '#10131a',
+    backgroundColor: '#080c25',
+    icon: path.join(ROOT, 'nexterm-app-icon.png'),
     title: 'NexTerm Desk',
     autoHideMenuBar: true,
     webPreferences: {
@@ -128,7 +129,8 @@ async function createLauncher() {
     minHeight: 700,
     useContentSize: true,
     resizable: true,
-    backgroundColor: '#10131a',
+    backgroundColor: '#080c25',
+    icon: path.join(ROOT, 'nexterm-app-icon.png'),
     title: 'NexTerm Desk · Verbindung wählen',
     autoHideMenuBar: true,
     webPreferences: {

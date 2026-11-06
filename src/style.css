@@ -760,23 +760,23 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
 /* Account themes: Material surfaces, restrained outlines, and no color glow. */
 html[data-theme="material-dark"] {
   color-scheme: dark;
-  --bg: #14181b;
-  --sidebar: #1b2023;
-  --surface: #1b2023;
-  --surface-1: #20272a;
-  --surface-2: #2a3336;
-  --surface-3: #354044;
-  --outline: #48565a;
-  --text: #e6edee;
-  --muted: #c1cecf;
-  --dim: #8d9b9c;
-  --accent: #7ce9df;
-  --accent-hover: #b7f3ed;
-  --accent-container: #243b3a;
-  --accent-contrast: #071312;
+  --bg: #080c25;
+  --sidebar: #0c1230;
+  --surface: #0e1533;
+  --surface-1: #121b3b;
+  --surface-2: #19244b;
+  --surface-3: #25315f;
+  --outline: #35416b;
+  --text: #eef2ff;
+  --muted: #bdc7e7;
+  --dim: #8c98bd;
+  --accent: #8c83ff;
+  --accent-hover: #b5a0ff;
+  --accent-container: #292954;
+  --accent-contrast: #080c25;
   --success: #b7e4c7;
   --danger: #f2b8b5;
-  --focus: #7ce9df;
+  --focus: #8292ff;
 }
 
 html[data-theme="material-white"] {
@@ -1099,17 +1099,26 @@ html[data-theme] .text-button:hover { color: var(--accent-hover); }
   html[data-theme] .topbar-actions { gap: 8px; }
 }
 
-/* Noah Muxxle brand accents, with account themes still controlling surface colors. */
-:root { --brand-teal: #7ce9df; --brand-white: #f6f8fb; --brand-ink: #071312; --brand-gradient: linear-gradient(118deg, #f6f8fb 0%, #c6f2ee 46%, #7ce9df 100%); }
+/* NexTerm brand palette: violet, electric blue, and cyan on deep navy. */
+:root {
+  --brand-violet: #a64aff;
+  --brand-blue: #6176ff;
+  --brand-cyan: #44e2ff;
+  --brand-teal: var(--brand-cyan);
+  --brand-white: #f5f7ff;
+  --brand-ink: #080c25;
+  --brand-gradient: linear-gradient(112deg, var(--brand-violet) 0%, var(--brand-blue) 52%, var(--brand-cyan) 100%);
+}
 html[data-theme] #headerAvatar[hidden], #logoutButton[hidden] { display: none !important; }
-.local-vault-error { min-height: 100vh; display: grid; align-content: center; justify-items: center; gap: 12px; padding: 30px; color: #f6f8fb; text-align: center; background: radial-gradient(ellipse at 50% 22%, rgba(124, 233, 223, .09), transparent 42%), #06070b; }
-.local-vault-error-mark { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(124, 233, 223, .3); border-radius: 14px; color: #7ce9df; background: rgba(124, 233, 223, .1); }
+.local-vault-error { min-height: 100vh; display: grid; align-content: center; justify-items: center; gap: 12px; padding: 30px; color: #f5f7ff; text-align: center; background: radial-gradient(ellipse at 50% 22%, color-mix(in srgb, var(--brand-blue) 13%, transparent), transparent 42%), #080c25; }
+.local-vault-error-mark { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--brand-cyan) 40%, transparent); border-radius: 14px; color: var(--brand-cyan); background: color-mix(in srgb, var(--brand-blue) 14%, transparent); }
 .local-vault-error h1 { max-width: 540px; margin: 0; font-size: clamp(28px, 4vw, 40px); }
 .local-vault-error p { max-width: 540px; margin: 0 0 10px; color: #a8b2c4; font-size: 14px; line-height: 1.6; }
-html[data-theme] .app-shell { background: radial-gradient(ellipse at 83% 0%, color-mix(in srgb, var(--brand-teal) 7%, transparent), transparent 34%), var(--bg); }
-html[data-theme] .brand-mark { color: #071312; background: linear-gradient(135deg, var(--brand-white), var(--brand-teal)); border-color: transparent; }
+html[data-theme] .app-shell { background: radial-gradient(ellipse at 88% 0%, color-mix(in srgb, var(--brand-cyan) 9%, transparent), transparent 36%), radial-gradient(ellipse at 5% 92%, color-mix(in srgb, var(--brand-violet) 9%, transparent), transparent 38%), var(--bg); }
+html[data-theme] .brand-mark { overflow: hidden; padding: 0; color: var(--brand-white); background: #080c25; border-color: color-mix(in srgb, var(--brand-blue) 38%, transparent); }
+.brand-mark img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .topbar .help-button { padding: 5px 0; white-space: nowrap; }
-.topbar .help-button:hover { color: var(--brand-teal); }
+.topbar .help-button:hover { color: var(--brand-cyan); }
 
 /* The server's overflow menu is available in both the sidebar and overview cards. */
 .host-row { position: relative; display: flex; align-items: center; gap: 2px; padding: 2px 3px 2px 0; cursor: default; }
@@ -1117,11 +1126,11 @@ html[data-theme] .brand-mark { color: #071312; background: linear-gradient(135de
 .host-row-menu { width: 26px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; border: 0; border-radius: 5px; color: #8d94a3; background: transparent; cursor: pointer; opacity: .3; transition: .15s ease; }
 .host-row-menu svg { width: 15px; height: 15px; }
 .host-row:hover .host-row-menu, .host-row-menu:focus-visible { opacity: 1; }
-.host-row-menu:hover { color: var(--brand-teal); background: color-mix(in srgb, var(--brand-teal) 10%, transparent); }
+.host-row-menu:hover { color: var(--brand-cyan); background: color-mix(in srgb, var(--brand-blue) 14%, transparent); }
 .host-row .host-popover { top: calc(100% - 2px); right: 0; }
 html[data-theme] .host-row-main,
 html[data-theme] .host-row-menu { color: var(--text); }
-html[data-theme] .host-row-menu:hover { color: var(--brand-teal); background: color-mix(in srgb, var(--brand-teal) 10%, transparent); }
+html[data-theme] .host-row-menu:hover { color: var(--brand-cyan); background: color-mix(in srgb, var(--brand-blue) 14%, transparent); }
 
 /* Documentation and administration dialogs. */
 .documentation-modal { width: min(100%, 850px); }
@@ -1154,30 +1163,31 @@ html[data-theme] .documentation-content section { border-color: var(--outline); 
 /* Shared Muxxle gradient accents for the browser and the desktop shell. */
 html[data-theme] .app-shell {
   background:
-    radial-gradient(ellipse at 86% 0%, color-mix(in srgb, var(--brand-teal) 14%, transparent), transparent 36%),
-    radial-gradient(ellipse at 3% 100%, color-mix(in srgb, var(--brand-white) 4%, transparent), transparent 32%),
+    radial-gradient(ellipse at 88% 0%, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 38%),
+    radial-gradient(ellipse at 4% 100%, color-mix(in srgb, var(--brand-violet) 11%, transparent), transparent 36%),
     var(--bg);
 }
 html[data-theme] .topbar { background: color-mix(in srgb, var(--surface) 92%, transparent); }
-html[data-theme] .brand-mark { color: var(--brand-ink); background: var(--brand-gradient); border-color: transparent; box-shadow: 0 4px 22px color-mix(in srgb, var(--brand-teal) 22%, transparent); }
+html[data-theme] .brand-mark { color: var(--brand-white); background: #080c25; border-color: color-mix(in srgb, var(--brand-blue) 38%, transparent); box-shadow: 0 4px 22px color-mix(in srgb, var(--brand-blue) 22%, transparent); }
 html[data-theme] .button-primary,
-html[data-theme] .auth-submit { color: var(--brand-ink); background: var(--brand-gradient); border-color: transparent; box-shadow: 0 5px 20px color-mix(in srgb, var(--brand-teal) 15%, transparent); }
+html[data-theme] .auth-submit { color: var(--brand-ink); background: var(--brand-gradient); border-color: transparent; box-shadow: 0 5px 20px color-mix(in srgb, var(--brand-blue) 19%, transparent); }
 html[data-theme] .button-primary:hover,
-html[data-theme] .auth-submit:hover { color: var(--brand-ink); background: linear-gradient(118deg, #ffffff 0%, #dcfbf7 42%, #9cf0e7 100%); border-color: transparent; }
+html[data-theme] .auth-submit:hover { color: var(--brand-ink); background: linear-gradient(112deg, #c47aff 0%, #8797ff 52%, #83edff 100%); border-color: transparent; }
 html[data-theme] .button-primary:disabled,
 html[data-theme] .auth-submit:disabled { color: var(--brand-ink); opacity: .54; }
-html[data-theme] .route-tab.active { color: var(--brand-teal); }
-html[data-theme] .route-tab.active::after { background: linear-gradient(90deg, var(--brand-white), var(--brand-teal)); }
+html[data-theme] .route-tab.active { color: var(--brand-cyan); }
+html[data-theme] .route-tab.active::after { background: var(--brand-gradient); }
 html[data-theme] .welcome-card {
   background:
-    radial-gradient(ellipse at 78% 45%, color-mix(in srgb, var(--brand-teal) 14%, transparent), transparent 45%),
+    radial-gradient(ellipse at 78% 45%, color-mix(in srgb, var(--brand-blue) 15%, transparent), transparent 45%),
+    radial-gradient(ellipse at 3% 100%, color-mix(in srgb, var(--brand-violet) 10%, transparent), transparent 45%),
     linear-gradient(118deg, var(--surface-1), var(--surface));
-  border-color: color-mix(in srgb, var(--brand-teal) 30%, var(--outline));
+  border-color: color-mix(in srgb, var(--brand-blue) 34%, var(--outline));
 }
-html[data-theme] .welcome-content h2 em { color: transparent; background: linear-gradient(100deg, var(--brand-white), var(--brand-teal)); background-clip: text; -webkit-background-clip: text; }
-html[data-theme] .auth-aside { background: radial-gradient(ellipse at 18% 16%, color-mix(in srgb, var(--brand-teal) 13%, transparent), transparent 42%), linear-gradient(150deg, var(--sidebar), var(--surface)); }
-html[data-theme] .auth-pitch h1 em { color: transparent; background: linear-gradient(100deg, var(--brand-white), var(--brand-teal)); background-clip: text; -webkit-background-clip: text; }
-html[data-theme] :focus-visible { outline-color: var(--brand-teal); }
+html[data-theme] .welcome-content h2 em { color: transparent; background: var(--brand-gradient); background-clip: text; -webkit-background-clip: text; }
+html[data-theme] .auth-aside { background: radial-gradient(ellipse at 18% 16%, color-mix(in srgb, var(--brand-violet) 16%, transparent), transparent 42%), radial-gradient(ellipse at 90% 90%, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 38%), linear-gradient(150deg, var(--sidebar), var(--surface)); }
+html[data-theme] .auth-pitch h1 em { color: transparent; background: var(--brand-gradient); background-clip: text; -webkit-background-clip: text; }
+html[data-theme] :focus-visible { outline-color: var(--brand-blue); }
 
 .server-card-description { margin: 8px 0 0; color: #9da6b4; font-size: 10px; line-height: 1.5; }
 .server-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
@@ -1316,7 +1326,7 @@ html[data-theme] .auth-aside {
 html[data-theme] .auth-pitch h1 em,
 html[data-theme] .welcome-content h2 em { color: transparent; background: linear-gradient(100deg, var(--brand-white), var(--brand-teal)); background-clip: text; -webkit-background-clip: text; }
 html[data-theme="material-white"] .auth-pitch h1 em,
-html[data-theme="material-white"] .welcome-content h2 em { background-image: linear-gradient(100deg, #167c76, #0e625f); }
+html[data-theme="material-white"] .welcome-content h2 em { background-image: linear-gradient(100deg, #762fda, #3658dc 54%, #087ca8); }
 html[data-theme] .auth-local-tag { color: var(--accent); }
 html[data-theme] .auth-reset-link:hover { color: var(--accent-hover); }
 html[data-theme] .host-row.selected .host-glyph { color: var(--accent); background: var(--surface-1); border-color: var(--outline); }
