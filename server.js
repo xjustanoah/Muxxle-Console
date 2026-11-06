@@ -28,19 +28,33 @@ const wss = new WebSocketServer({ noServer: true });
 const sessions = new Map();
 const loginSessions = new Map();
 const loginAttempts = new Map();
+const authRateLimits = new Map();
 const loginChallenges = new Map();
 const webAuthnChallenges = new Map();
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT_MAX_KEYS = 10000;
 const STORE_FORMAT = 'nexterm-encrypted-json';
 const ACCOUNT_THEMES = new Set(['material-dark', 'material-white', 'muxxle']);
 let activeHost = DEFAULT_HOST;
 let activePort = DEFAULT_PORT;
 let serverStarted = false;
 let localDesktopMode = false;
+const ADMIN_BOOTSTRAP_TOKEN = process.env.NEXTERM_ADMIN_BOOTSTRAP_TOKEN || '';
+let bootstrapRegistrationInProgress = false;
 
 if (DATA_KEY && DATA_KEY.length !== 32) throw new Error('NEXTERM_DATA_KEY muss ein 32-Byte-Hexschlüssel sein.');
+if (ADMIN_BOOTSTRAP_TOKEN && Array.from(ADMIN_BOOTSTRAP_TOKEN).length < 32) {
+  throw new Error('NEXTERM_ADMIN_BOOTSTRAP_TOKEN muss mindestens 32 Zeichen lang sein.');
+}
+
+function verifyAdminBootstrapToken(candidate) {
+  if (!ADMIN_BOOTSTRAP_TOKEN || typeof candidate !== 'string' || candidate.length > 512) return false;
+  const expected = crypto.createHash('sha256').update(ADMIN_BOOTSTRAP_TOKEN).digest();
+  const actual = crypto.createHash('sha256').update(candidate).digest();
+  return crypto.timingSafeEqual(actual, expected);
+}
 
 function encodeStoredJson(value) {
   const plaintext = JSON.stringify(value, null, 2);
@@ -224,6 +238,25 @@ function requireSameOrigin(req, res, next) {
   }
 }
 
+function allowAuthRequest(req, res, action, limit, windowMs) {
+  const now = Date.now();
+  const key = `${action}:${req.ip || 'local'}`;
+  let entry = authRateLimits.get(key);
+  if (!entry || entry.resetAt <= now) entry = { count: 0, resetAt: now + windowMs };
+  entry.count++;
+  authRateLimits.set(key, entry);
+  if (authRateLimits.size > AUTH_RATE_LIMIT_MAX_KEYS) {
+    for (const [existingKey, value] of authRateLimits) {
+      if (value.resetAt <= now) authRateLimits.delete(existingKey);
+      if (authRateLimits.size <= AUTH_RATE_LIMIT_MAX_KEYS) break;
+    }
+    if (authRateLimits.size > AUTH_RATE_LIMIT_MAX_KEYS) authRateLimits.delete(authRateLimits.keys().next().value);
+  }
+  if (entry.count <= limit) return true;
+  res.status(429).json({ error: 'Zu viele Anfragen. Bitte warte kurz und versuche es erneut.' });
+  return false;
+}
+
 async function requireAuth(req, res, next) {
   const token = parseCookies(req.headers.cookie).nexterm_session;
   const session = token && loginSessions.get(token);
@@ -278,6 +311,15 @@ const authExpiryTimer = setInterval(() => {
   }
   for (const [key, attempt] of loginAttempts) {
     if (attempt.updatedAt && Date.now() - attempt.updatedAt > 24 * 60 * 60 * 1000) loginAttempts.delete(key);
+  }
+  for (const [key, limit] of authRateLimits) {
+    if (limit.resetAt <= Date.now()) authRateLimits.delete(key);
+  }
+  for (const [token, challenge] of loginChallenges) {
+    if (challenge.expiresAt <= Date.now()) loginChallenges.delete(token);
+  }
+  for (const [key, challenge] of webAuthnChallenges) {
+    if (challenge.expiresAt <= Date.now()) webAuthnChallenges.delete(key);
   }
 }, 60_000);
 authExpiryTimer.unref();
@@ -540,7 +582,18 @@ async function sendPasswordResetMail(user, link) {
 }
 
 function passwordResetEnabled() {
-  return process.env.NEXTERM_PASSWORD_RESET_ENABLED === '1' && Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
+  return process.env.NEXTERM_PASSWORD_RESET_ENABLED === '1'
+    && Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && publicBaseUrl());
+}
+
+function publicBaseUrl() {
+  try {
+    const url = new URL(process.env.NEXTERM_PUBLIC_URL || '');
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase());
+    if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return null;
+    return url.origin;
+  } catch { return null; }
 }
 
 async function finishPasswordLogin(req, res, user) {
@@ -550,13 +603,17 @@ async function finishPasswordLogin(req, res, user) {
 }
 
 app.get('/api/auth/status', async (_req, res) => {
-  try { res.json({ hasAccounts: (await readData()).users.length > 0, passwordResetEnabled: passwordResetEnabled() }); }
+  try {
+    const hasAccounts = (await readData()).users.length > 0;
+    res.json({ hasAccounts, passwordResetEnabled: passwordResetEnabled(), adminBootstrapRequired: !hasAccounts, adminBootstrapConfigured: Boolean(ADMIN_BOOTSTRAP_TOKEN) });
+  }
   catch { res.status(500).json({ error: 'Kontostatus konnte nicht gelesen werden.' }); }
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(publicUser(req.user)));
 
 app.post('/api/auth/register', async (req, res) => {
+  if (!allowAuthRequest(req, res, 'register', 10, 60 * 60 * 1000)) return;
   const { name, username, password, email } = req.body || {};
   if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
     return res.status(400).json({ error: 'Bitte gib einen Namen mit maximal 60 Zeichen ein.' });
@@ -572,37 +629,56 @@ app.post('/api/auth/register', async (req, res) => {
   }
   try {
     const data = await readData();
-    const normalizedUsername = username.trim().toLowerCase();
-    if (data.users.some(user => user.username === normalizedUsername)) {
-      return res.status(409).json({ error: 'Dieser Benutzername ist bereits vergeben.' });
+    const isFirstAccount = data.users.length === 0;
+    if (isFirstAccount && bootstrapRegistrationInProgress) {
+      return res.status(409).json({ error: 'Die Erstregistrierung läuft bereits. Bitte versuche es erneut.' });
     }
-    const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = (await derivePassword(password, Buffer.from(salt, 'hex'))).toString('hex');
-    let hosts = [];
-    if (data.users.length === 0) hosts = await readLegacyHosts();
-    const workspace = { id: crypto.randomUUID(), name: 'Mein Workspace', hosts };
-    const user = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      username: normalizedUsername,
-      email: email.trim().toLowerCase(),
-      passwordSalt: salt,
-      passwordHash,
-      role: data.users.length === 0 ? 'admin' : 'user',
-      workspaces: [workspace],
-      activeWorkspaceId: workspace.id,
-      passkeys: [],
-      recoveryCodes: []
-    };
-    data.users.push(user);
-    await writeData(data);
-    res.status(201).json({ user: issueLoginSession(req, res, user) });
+    if (isFirstAccount) bootstrapRegistrationInProgress = true;
+    try {
+      if (isFirstAccount) {
+        if (!ADMIN_BOOTSTRAP_TOKEN) {
+          return res.status(503).json({ error: 'Die Erstregistrierung ist noch nicht freigeschaltet. Der Betreiber muss NEXTERM_ADMIN_BOOTSTRAP_TOKEN mit mindestens 32 Zeichen setzen.' });
+        }
+        if (!verifyAdminBootstrapToken(req.body?.adminBootstrapToken)) {
+          return res.status(403).json({ error: 'Der Administrator-Startcode ist ungültig.' });
+        }
+      }
+      const normalizedUsername = username.trim().toLowerCase();
+      if (data.users.some(user => user.username === normalizedUsername)) {
+        return res.status(409).json({ error: 'Dieser Benutzername ist bereits vergeben.' });
+      }
+      const salt = crypto.randomBytes(16).toString('hex');
+      const passwordHash = (await derivePassword(password, Buffer.from(salt, 'hex'))).toString('hex');
+      let hosts = [];
+      if (isFirstAccount) hosts = await readLegacyHosts();
+      const workspace = { id: crypto.randomUUID(), name: 'Mein Workspace', hosts };
+      const user = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        username: normalizedUsername,
+        email: email.trim().toLowerCase(),
+        passwordSalt: salt,
+        passwordHash,
+        role: isFirstAccount ? 'admin' : 'user',
+        theme: 'material-dark',
+        workspaces: [workspace],
+        activeWorkspaceId: workspace.id,
+        passkeys: [],
+        recoveryCodes: []
+      };
+      data.users.push(user);
+      await writeData(data);
+      res.status(201).json({ user: issueLoginSession(req, res, user) });
+    } finally {
+      if (isFirstAccount) bootstrapRegistrationInProgress = false;
+    }
   } catch {
     res.status(500).json({ error: 'Konto konnte nicht angelegt werden.' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  if (!allowAuthRequest(req, res, 'login', 25, 5 * 60 * 1000)) return;
   const identifier = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
   if (password.length > 256) return res.status(400).json({ error: 'Das Passwort ist zu lang.' });
@@ -625,6 +701,9 @@ app.post('/api/auth/login', async (req, res) => {
       if (next.count >= LOGIN_MAX_ATTEMPTS) {
         next.count = 0;
         next.blockedUntil = Date.now() + LOGIN_LOCK_MS;
+      }
+      if (!loginAttempts.has(attemptKey) && loginAttempts.size >= AUTH_RATE_LIMIT_MAX_KEYS) {
+        loginAttempts.delete(loginAttempts.keys().next().value);
       }
       loginAttempts.set(attemptKey, next);
       return res.status(401).json({ error: 'Benutzername oder Passwort stimmen nicht.' });
@@ -661,6 +740,7 @@ app.post('/api/auth/verify-factor', async (req, res) => {
 app.post('/api/auth/request-reset', async (req, res) => {
   const generic = { message: 'Wenn das Konto existiert und die E-Mail-Funktion aktiv ist, wurde ein Link versendet.' };
   if (!passwordResetEnabled()) return res.json(generic);
+  if (!allowAuthRequest(req, res, 'request-reset', 5, 60 * 60 * 1000)) return;
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const data = await readData();
@@ -670,7 +750,9 @@ app.post('/api/auth/request-reset', async (req, res) => {
       user.passwordResetHash = crypto.createHash('sha256').update(token).digest('hex');
       user.passwordResetExpiresAt = Date.now() + 30 * 60 * 1000;
       await writeData(data);
-      const link = `${req.protocol}://${req.get('host')}/?reset=${encodeURIComponent(token)}`;
+      const linkUrl = new URL('/', publicBaseUrl());
+      linkUrl.searchParams.set('reset', token);
+      const link = linkUrl.toString();
       await sendPasswordResetMail(user, link);
     }
     res.json(generic);
@@ -679,6 +761,7 @@ app.post('/api/auth/request-reset', async (req, res) => {
 
 app.post('/api/auth/reset-password', async (req, res) => {
   if (!passwordResetEnabled()) return res.status(404).json({ error: 'Passwortzurücksetzung ist deaktiviert.' });
+  if (!allowAuthRequest(req, res, 'reset-password', 10, 15 * 60 * 1000)) return;
   const token = String(req.body?.token || '');
   const password = String(req.body?.password || '');
   if (password.length < 12 || password.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
@@ -1305,6 +1388,7 @@ export async function startServer(options = {}) {
     DATA_KEY = Buffer.isBuffer(options.dataKey) ? Buffer.from(options.dataKey) : Buffer.from(String(options.dataKey), 'hex');
     if (DATA_KEY.length !== 32) throw new Error('Der lokale Tresorschlüssel muss 32 Byte lang sein.');
   }
+  if (!DATA_KEY) throw new Error('NEXTERM_DATA_KEY fehlt. Starte NexTerm über start-server.cjs oder Pelican, damit gespeicherte Kontodaten verschlüsselt werden.');
   localDesktopMode = options.localDesktop === true;
   activeHost = options.host || DEFAULT_HOST;
   activePort = options.port ?? DEFAULT_PORT;

@@ -18,7 +18,7 @@ npm run build
 npm start
 ```
 
-Die gebaute Anwendung läuft dann auf `http://127.0.0.1:4783`.
+Die gebaute Anwendung läuft dann auf `http://127.0.0.1:4783`. Beide Startbefehle verwenden `start-server.cjs`: Beim ersten Start wird in `~/.nexterm/.data-key` ein Datenschlüssel mit eingeschränkten Dateirechten angelegt. Kontodaten werden mit AES-256-GCM verschlüsselt. Bestehende Klartextdateien werden beim Start verschlüsselt. Fehlt ein Schlüssel für bereits verschlüsselte Dateien, bricht der Start ab, statt Daten unverschlüsselt neu zu speichern.
 
 ## Windows-Desktop-App
 
@@ -36,7 +36,7 @@ Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.3-Setup.exe`. 
 
 Für Webserver sind HTTPS und WebSocket-Weiterleitung erforderlich. Wenn TLS an einem Reverse Proxy endet, starte NexTerm dahinter mit `TRUST_PROXY=1`, leite den ursprünglichen Host und das HTTPS-Schema korrekt weiter und aktiviere den WebSocket-Upgrade für `/terminal`. HTTP ist in der Desktop-App nur für `localhost` erlaubt.
 
-Für gespeicherte Konten auf einem selbst betriebenen Webserver kannst du zusätzlich einen festen 32-Byte-Schlüssel konfigurieren: einmalig mit `openssl rand -hex 32` erzeugen, sicher als `NEXTERM_DATA_KEY` im Dienst hinterlegen und bei jedem Start denselben Wert verwenden. Zusammen mit `TRUST_PROXY=1` werden Konten und Serverprofile serverseitig verschlüsselt. Geht dieser Schlüssel verloren, lässt sich der Datenbestand nicht mehr entschlüsseln.
+Für selbst betriebene Webserver kannst du einen festen 32-Byte-Schlüssel sicher als `NEXTERM_DATA_KEY` im Dienst hinterlegen und bei jedem Start denselben Wert verwenden. Ohne diesen Wert erstellt `start-server.cjs` einen Schlüssel unter `~/.nexterm/.data-key`. Die Pelican-Installation verwaltet ihren Schlüssel separat in `/home/container/.nexterm/.data-key`. Geht der Schlüssel verloren, lässt sich der verschlüsselte Datenbestand nicht mehr entschlüsseln.
 
 ### Pelican-Startup
 
@@ -50,9 +50,9 @@ Das Skript installiert Produktionsabhängigkeiten, erstellt den Datenschlüssel 
 
 ## Webkonten, Workspaces und Anmeldung
 
-Neue Webkonten benötigen einen Anzeigenamen, Benutzernamen, eine E-Mail-Adresse und ein Passwort. Vorhandene Konten werden beim ersten Zugriff auf ein persönliches Workspace-Format migriert; gespeicherte Serverprofile bleiben dabei erhalten. Der erste Webaccount wird Admin. Auf bestehenden Installationen wird der bisher erste Account zum Admin migriert, sofern `NEXTERM_ADMIN_USERNAME` nicht auf einen anderen Benutzernamen gesetzt ist. Admins können ausschließlich temporäre Passwörter für andere Konten setzen; betroffene Nutzer müssen dieses Passwort nach der Anmeldung ändern. Der lokale Tresor verwendet ein internes Profil, das kein sichtbares Anmeldekonto darstellt.
+Neue Webkonten benötigen einen Anzeigenamen, Benutzernamen, eine E-Mail-Adresse und ein Passwort. Vorhandene Konten werden beim ersten Zugriff auf ein persönliches Workspace-Format migriert; gespeicherte Serverprofile bleiben dabei erhalten. Bei einer neuen, noch leeren Webserver-Installation muss der Betreiber vor dem ersten Konto `NEXTERM_ADMIN_BOOTSTRAP_TOKEN` als geschütztes Geheimnis mit mindestens 32 Zeichen setzen. Dieses Startgeheimnis ist für die Erstregistrierung erforderlich; das erste Konto wird Admin, und nach seiner Anlage ist der Startcode nicht mehr nötig. So kann niemand den Admin-Zugang durch eine schnellere öffentliche Registrierung übernehmen. Auf bestehenden Installationen wird der bisher erste Account zum Admin migriert, sofern `NEXTERM_ADMIN_USERNAME` nicht auf einen anderen Benutzernamen gesetzt ist. Admins können ausschließlich temporäre Passwörter für andere Konten setzen; betroffene Nutzer müssen dieses Passwort nach der Anmeldung ändern. Der lokale Tresor verwendet ein internes Profil, das kein sichtbares Anmeldekonto darstellt.
 
-Passwortänderungen sind in den Kontoeinstellungen verfügbar. E-Mail-Passwort-Resets bleiben standardmäßig aus. Für den Versand müssen `NEXTERM_PASSWORD_RESET_ENABLED=1`, `SMTP_HOST` und `SMTP_FROM` gesetzt werden. Optional sind `SMTP_PORT` (Standard `587`), `SMTP_SECURE=1` für implizites TLS sowie `SMTP_USER` und `SMTP_PASS`. Reset-Links laufen nach 30 Minuten ab.
+Passwortänderungen sind in den Kontoeinstellungen verfügbar. E-Mail-Passwort-Resets bleiben standardmäßig aus. Für den Versand müssen `NEXTERM_PASSWORD_RESET_ENABLED=1`, `NEXTERM_PUBLIC_URL`, `SMTP_HOST` und `SMTP_FROM` gesetzt werden. `NEXTERM_PUBLIC_URL` muss die feste HTTPS-Stammadresse der Instanz sein, zum Beispiel `https://ssh.noah-muxxle.dev`; sie wird für Reset-Links verwendet und verhindert, dass ein vom Request gesetzter Hostname in die E-Mail gelangt. Optional sind `SMTP_PORT` (Standard `587`), `SMTP_SECURE=1` für implizites TLS sowie `SMTP_USER` und `SMTP_PASS`. Reset-Links laufen nach 30 Minuten ab.
 
 OTP und Passkeys sind pro Konto optional und werden in den Kontoeinstellungen aktiviert. Vor dem Aktivieren muss der Nutzer die einmalig angezeigten Wiederherstellungscodes bestätigen. Passkeys benötigen HTTPS; die lokale Desktop-App kann sie auf `localhost` verwenden. Wenn die Instanz hinter einem Proxy läuft, muss NexTerm mit `TRUST_PROXY=1` gestartet werden. Optional lassen sich `NEXTERM_WEBAUTHN_RP_ID` und `NEXTERM_WEBAUTHN_ORIGIN` explizit setzen.
 
@@ -78,6 +78,6 @@ Monitoring liest Linux-Werte aus `/proc` und verwendet `df` für das Root-Dateis
 
 Der lokale Webdienst bindet standardmäßig an `127.0.0.1`. Benutzerkonten und die jeweils eigenen Serverprofile werden im Browsermodus in `~/.nexterm/users.json` gespeichert. Die Windows-Desktop-App verwendet einen separaten, mit AES-256-GCM verschlüsselten Tresor. Kontopasswörter werden mit individuellem Salt und scrypt abgeleitet; SSH-Passwörter und private Schlüssel werden nur zum Verbindungsaufbau verwendet und nicht gespeichert. Anmeldesitzungen liegen im Arbeitsspeicher und enden nach zwölf Stunden oder beim Abmelden. Serverprofile aus älteren lokalen Dateien werden in den Tresor kopiert. Bei der ersten Serververbindung wird der SSH-Fingerabdruck angezeigt; bei einer Änderung muss der neue Fingerabdruck bewusst bestätigt werden.
 
-Lokale App-Konten bleiben im verschlüsselten Tresor dieses Geräts. Webserver-Konten und ihre Workspaces werden auf der NexTerm-Instanz gespeichert. E-Mail-Adressen werden bei der Registrierung nicht verifiziert; aktiviere E-Mail-Resets erst, wenn der SMTP-Versand eingerichtet ist.
+Lokale App-Konten bleiben im verschlüsselten Tresor dieses Geräts. Webserver-Konten und ihre Workspaces werden verschlüsselt auf der NexTerm-Instanz gespeichert. E-Mail-Adressen werden bei der Registrierung nicht verifiziert; aktiviere E-Mail-Resets erst, wenn SMTP und die feste öffentliche URL eingerichtet sind.
 
 Die Anwendung enthält noch keine Auto-Updates, Team-Synchronisierung, Agent-Weiterleitung oder Unterstützung für Windows/FreeBSD-Servermonitoring.

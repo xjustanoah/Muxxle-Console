@@ -13,7 +13,7 @@ const icons = {
   files: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5h7l2 2h8v10h-17z"/><path d="M3.5 7.5v-2h7l2 2"/></svg>',
   chart: '<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 5-7"/></svg>',
   home: '<svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-7h6v7"/></svg>',
-  settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.3 1-1.5 2.6-1.6-.7a7.8 7.8 0 0 1-1.7 1l-.3 1.8h-3l-.3-1.8a7.8 7.8 0 0 1-1.7-1l-1.6.7-1.5-2.6 1.4-1.1a7.5 7.5 0 0 1 0-2l-1.4-1.1 1.5-2.6 1.6.7a7.8 7.8 0 0 1 1.7-1l.3-1.8h3l.3 1.8a7.8 7.8 0 0 1 1.7 1l1.6-.7 1.5 2.6-1.4 1.1a7.5 7.5 0 0 1 0 2Z" transform="translate(-1 -1) scale(1.08)"/></svg>',
+  settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.8v2.1m0 14.2v2.1M2.8 12h2.1m14.2 0h2.1M5.5 5.5 7 7m10 10 1.5 1.5m0-13L17 7M7 17l-1.5 1.5"/><circle cx="12" cy="12" r="8.1"/></svg>',
   key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8 2 2-2 2 2 2-3 3-2-2-2 2"/></svg>',
   lock: '<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>',
   cloud: '<svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11-1A4.5 4.5 0 0 0 7 18Z"/></svg>',
@@ -33,6 +33,7 @@ const icons = {
 
 const state = {
   user: null, workspaces: [], activeWorkspaceId: null, passwordResetEnabled: false,
+  adminBootstrapRequired: false, adminBootstrapConfigured: false,
   hosts: [], sessions: [], activeId: null, selectedHostId: null, route: 'overview', query: '',
   metrics: [], metricsSession: null, latestMetrics: null,
   filePath: '', fileSession: null, files: [],
@@ -43,12 +44,13 @@ const ACCOUNT_THEMES = ['material-dark', 'material-white', 'muxxle'];
 let themeSaveQueue = Promise.resolve();
 
 const root = document.querySelector('#app');
+document.documentElement.dataset.theme = 'material-dark';
 const isLocalInstance = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname.toLowerCase());
 const isLocalDesktopVault = isLocalInstance && new URLSearchParams(location.search).get('desktop') === 'local';
 const appMarkup = `
   <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand-row"><div class="brand-mark">${icons.brand}</div><div class="brand-name">nexterm<span>DESK</span></div><button class="icon-button mobile-menu" id="mobileMenu" aria-label="Menü">${icons.menu}</button></div>
+    <aside class="sidebar" id="appSidebar">
+      <div class="brand-row"><div class="brand-mark">${icons.brand}</div><div class="brand-name">nexterm<span>DESK</span></div></div>
       <button class="workspace-switch" id="workspaceSwitch" aria-haspopup="true" aria-expanded="false"><span class="workspace-avatar" id="workspaceAvatar">W</span><span class="workspace-copy"><b id="workspaceName">Mein Workspace</b><small id="workspaceContext">${isLocalInstance ? 'Lokaler Tresor' : 'Webserver-Workspace'}</small></span><span class="workspace-caret">⌄</span></button>
       <button class="add-connection" id="addHost">${icons.plus}<span>Server hinzufügen</span><kbd>⌘ K</kbd></button>
       <label class="search-box">${icons.search}<input id="hostSearch" placeholder="Server suchen…" autocomplete="off"><kbd>/</kbd></label>
@@ -60,7 +62,7 @@ const appMarkup = `
       </div>
     </aside>
     <main class="main-area">
-      <header class="topbar"><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><label class="theme-picker"><span>THEME</span><select id="themeSelect" aria-label="Farbschema"><option value="material-dark">Darkmode · Material Dark</option><option value="material-white">Whitemode · Material White</option><option value="muxxle">Muxxle · Dark Red</option></select></label><button class="help-button" id="helpButton">Hilfe</button><button class="help-button" id="documentationButton">Dokumentation</button><button class="help-button" id="settingsButton" hidden>Einstellungen</button><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
+      <header class="topbar"><button type="button" class="icon-button mobile-menu" id="mobileMenu" aria-label="Servermenü öffnen" aria-controls="appSidebar" aria-expanded="false">${icons.menu}</button><div class="breadcrumb"><span>WORKSPACE</span><b>/</b><span id="breadcrumbName">ÜBERSICHT</span></div><div class="topbar-actions"><div class="local-badge"><span></span>${isLocalInstance ? 'Nur auf diesem Gerät' : 'Webserver'}</div><label class="theme-picker"><span>THEME</span><select id="themeSelect" aria-label="Farbschema"><option value="material-dark">Darkmode · Material Dark</option><option value="material-white">Whitemode · Material White</option><option value="muxxle">Muxxle · Dark Red</option></select></label><button class="help-button" id="helpButton">Hilfe</button><button class="help-button" id="documentationButton">Dokumentation</button><button class="help-button" id="settingsButton" hidden>Einstellungen</button><div class="mobile-more-wrap"><button type="button" class="icon-button mobile-more-button" id="mobileMoreButton" aria-label="Weitere Menüpunkte" aria-haspopup="true" aria-expanded="false">${icons.dots}</button><div class="mobile-more-menu" id="mobileMoreMenu" hidden><button type="button" data-mobile-action="help">${icons.shield}Hilfe</button><button type="button" data-mobile-action="documentation">${icons.file}Dokumentation</button><button type="button" id="mobileAdminSettings" data-mobile-action="settings" hidden>${icons.settings}Einstellungen</button></div></div><button class="avatar-small" id="headerAvatar" title="Angemeldetes Konto">S</button></div></header>
       <div class="page-content">
         <div class="page-heading"><div><div class="eyebrow" id="pageEyebrow">DEIN SERVER-WORKSPACE</div><h1 id="pageTitle">Alles an einem Ort.</h1><p id="pageSubtitle">Verbinde dich sicher mit deinen Servern und behalte den Überblick.</p></div><div class="heading-actions"><button class="button button-secondary" id="quickTerminal" disabled>${icons.terminal}Terminal öffnen</button><button class="button button-primary" id="headingAdd">${icons.plus}Server verbinden</button></div></div>
         <div class="route-tabs" id="routeTabs">
@@ -92,6 +94,7 @@ const appMarkup = `
       </div>
     </main>
   </div>
+  <button type="button" class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Servermenü schließen" hidden></button>
   <div class="modal-root" id="modalRoot"></div>
   <div class="toast-stack" id="toastStack"></div>
 `;
@@ -116,11 +119,11 @@ async function api(url, options = {}) {
 }
 
 function terminalThemeFor(theme) {
-  const common = { black: '#242731', red: '#ff777f', green: '#61d99d', yellow: '#eacb77', blue: '#7faeff', magenta: '#c1a3ff', cyan: '#6bd5df', white: '#dce2ed', brightBlack: '#646d80', brightRed: '#ff969c', brightGreen: '#83e6b1', brightYellow: '#f5d88d', brightBlue: '#9bc0ff', brightMagenta: '#d1b9ff', brightCyan: '#8ce3ea', brightWhite: '#ffffff' };
+  const common = { black: '#242731', red: '#ff777f', green: '#61d99d', yellow: '#eacb77', blue: '#7faeff', magenta: '#7ce9df', cyan: '#6bd5df', white: '#dce2ed', brightBlack: '#646d80', brightRed: '#ff969c', brightGreen: '#83e6b1', brightYellow: '#f5d88d', brightBlue: '#9bc0ff', brightMagenta: '#b7f3ed', brightCyan: '#8ce3ea', brightWhite: '#ffffff' };
   const palettes = {
-    'material-dark': { background: '#141218', foreground: '#e6e1e5', cursor: '#d0bcff', cursorAccent: '#141218', selectionBackground: '#d0bcff55', magenta: '#d0bcff', brightMagenta: '#eaddff' },
-    'material-white': { background: '#fffbff', foreground: '#1c1b1f', cursor: '#6750a4', cursorAccent: '#fffbff', selectionBackground: '#6750a433', magenta: '#6750a4', brightMagenta: '#7e67ad', white: '#1c1b1f', brightWhite: '#38343b' },
-    muxxle: { background: '#140b0c', foreground: '#f2dfe0', cursor: '#ffb4ab', cursorAccent: '#140b0c', selectionBackground: '#ffb4ab55', magenta: '#ffb4ab', brightMagenta: '#ffd9d4' }
+    'material-dark': { background: '#14181b', foreground: '#e6edee', cursor: '#7ce9df', cursorAccent: '#14181b', selectionBackground: '#7ce9df55', magenta: '#7ce9df', brightMagenta: '#b7f3ed' },
+    'material-white': { background: '#ffffff', foreground: '#172020', cursor: '#167c76', cursorAccent: '#ffffff', selectionBackground: '#167c7633', magenta: '#167c76', brightMagenta: '#2f9e97', white: '#172020', brightWhite: '#38343b' },
+    muxxle: { background: '#140b0c', foreground: '#f2dfe0', cursor: '#7ce9df', cursorAccent: '#140b0c', selectionBackground: '#7ce9df55', magenta: '#7ce9df', brightMagenta: '#b7f3ed' }
   };
   return { ...common, ...(palettes[theme] || palettes['material-dark']) };
 }
@@ -161,7 +164,7 @@ function showAuthScreen(mode = 'login', errorMessage = '') {
         <div class="auth-aside-bottom"><span>SSH · SFTP · MONITORING</span><span>${isLocalInstance ? 'LOKALER TRESOR' : 'WEBSERVER'}</span></div>
       </aside>
       <main class="auth-main"><section class="auth-card"><div class="auth-mobile-brand"><span class="brand-mark">${icons.brand}</span><span>NEXTERM<small>DESK</small></span></div><div class="auth-card-kicker">${registering ? 'NEUES LOKALES KONTO' : 'SICHERER ZUGANG'}</div><h2>${registering ? 'Konto anlegen' : 'Willkommen zurück'}</h2><p class="auth-card-intro">${registering ? 'Erstelle dein persönliches Konto und verwalte deine eigenen Server.' : 'Melde dich an, um deine Server und Verbindungen zu öffnen.'}</p>
-        <form id="appAuthForm" novalidate>${registering ? `<label class="form-field"><span>Anzeigename</span><input name="name" placeholder="Dein Name" autocomplete="name" maxlength="60" required></label><label class="form-field"><span>E-Mail-Adresse</span><input name="email" type="email" placeholder="name@example.com" autocomplete="email" maxlength="254" required></label>` : ''}<label class="form-field"><span>Benutzername</span><input name="username" placeholder="z. B. alex" autocomplete="username" minlength="3" maxlength="32" required></label><label class="form-field"><span>Passwort${registering ? ' · mindestens 12 Zeichen' : ''}</span><input name="password" type="password" placeholder="${registering ? 'Mindestens 12 Zeichen' : 'Dein Passwort'}" autocomplete="${registering ? 'new-password' : 'current-password'}" ${registering ? 'minlength="12"' : ''} maxlength="256" required></label><div class="auth-form-error" id="authError" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</div><button class="button button-primary auth-submit" id="authSubmit" type="submit">${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}</button></form>
+        <form id="appAuthForm" novalidate>${registering ? `<label class="form-field"><span>Anzeigename</span><input name="name" placeholder="Dein Name" autocomplete="name" maxlength="60" required></label><label class="form-field"><span>E-Mail-Adresse</span><input name="email" type="email" placeholder="name@example.com" autocomplete="email" maxlength="254" required></label>${state.adminBootstrapRequired ? `<label class="form-field"><span>Einmaliger Administrator-Startcode</span><input name="adminBootstrapToken" type="password" placeholder="Startcode aus der Serverkonfiguration" autocomplete="off" maxlength="512" required></label><p class="auth-bootstrap-note">${state.adminBootstrapConfigured ? 'Dieser einmalige Code wird nur für das erste Administratorkonto benötigt.' : 'Die Erstregistrierung ist noch gesperrt. Der Betreiber muss NEXTERM_ADMIN_BOOTSTRAP_TOKEN mit mindestens 32 Zeichen in der Serverkonfiguration setzen.'}</p>` : ''}` : ''}<label class="form-field"><span>Benutzername</span><input name="username" placeholder="z. B. alex" autocomplete="username" minlength="3" maxlength="32" required></label><label class="form-field"><span>Passwort${registering ? ' · mindestens 12 Zeichen' : ''}</span><input name="password" type="password" placeholder="${registering ? 'Mindestens 12 Zeichen' : 'Dein Passwort'}" autocomplete="${registering ? 'new-password' : 'current-password'}" ${registering ? 'minlength="12"' : ''} maxlength="256" required></label><div class="auth-form-error" id="authError" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</div><button class="button button-primary auth-submit" id="authSubmit" type="submit" ${registering && state.adminBootstrapRequired && !state.adminBootstrapConfigured ? 'disabled' : ''}>${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}</button></form>
         ${!registering && state.passwordResetEnabled ? '<button type="button" class="auth-reset-link" id="requestReset">Passwort vergessen?</button>' : ''}<div class="auth-switch">${registering ? 'Schon ein Konto?' : 'Noch kein Konto?'} <button type="button" id="authSwitch">${registering ? 'Anmelden' : 'Konto anlegen'}</button></div><div class="auth-card-security">${icons.lock}<span>Passwörter werden nur als gesalzener Hash gespeichert. Serverzugänge gehören jeweils zu deinem Konto.</span></div>
       </section><div class="auth-main-foot">${isLocalInstance ? 'Deine Kontodaten bleiben verschlüsselt auf diesem Gerät.' : 'Melde dich mit dem Konto dieser NexTerm-Instanz an.'}</div></main>
     </div>`;
@@ -175,18 +178,20 @@ function showAuthScreen(mode = 'login', errorMessage = '') {
     const password = String(form.get('password') || '');
     const name = String(form.get('name') || '').trim();
     const email = String(form.get('email') || '').trim();
+    const adminBootstrapToken = String(form.get('adminBootstrapToken') || '');
     const error = $('#authError');
     const submit = $('#authSubmit');
     error.hidden = true;
     if (registering && !name) { error.textContent = 'Bitte gib deinen Anzeigenamen ein.'; error.hidden = false; return; }
     if (registering && !email) { error.textContent = 'Bitte gib deine E-Mail-Adresse ein.'; error.hidden = false; return; }
+    if (registering && state.adminBootstrapRequired && !adminBootstrapToken) { error.textContent = 'Für das erste Administratorkonto ist der Startcode erforderlich.'; error.hidden = false; return; }
     if (!username || !password) { error.textContent = 'Benutzername und Passwort sind erforderlich.'; error.hidden = false; return; }
     if (registering && password.length < 12) { error.textContent = 'Wähle ein Passwort mit mindestens 12 Zeichen.'; error.hidden = false; return; }
     submit.disabled = true;
     submit.innerHTML = '<span class="spinner"></span>Wird verarbeitet…';
     try {
       const result = registering
-        ? await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, username, email, password }) })
+        ? await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, username, email, password, adminBootstrapToken }) })
         : await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
       if (result.factorRequired) showFactorScreen(result.methods, username);
       else await mountWorkspace(result.user);
@@ -274,6 +279,7 @@ async function mountWorkspace(user) {
   $('#accountAvatar').textContent = user.name.slice(0, 1).toUpperCase();
   $('#headerAvatar').textContent = user.name.slice(0, 1).toUpperCase();
   $('#settingsButton').hidden = isLocalDesktopVault || user.role !== 'admin';
+  $('#mobileAdminSettings').hidden = isLocalDesktopVault || user.role !== 'admin';
   bindEvents();
   await loadWorkspace();
   if (!isLocalDesktopVault && (user.mustChangePassword || !user.email)) openAccountModal(Boolean(user.mustChangePassword), !user.email);
@@ -326,7 +332,7 @@ function renderHosts() {
     const active = host.id === state.selectedHostId || session?.id === state.activeId;
     return `<div class="host-row ${active ? 'selected' : ''} ${session ? 'is-connected' : ''}"><button class="host-row-main" data-host-id="${escapeHtml(host.id)}"><span class="host-glyph">${icons.server}<i class="${session ? 'online' : ''}"></i></span><span class="host-row-copy"><b>${escapeHtml(host.name)}</b><small>${escapeHtml(host.username)}@${escapeHtml(host.host)}</small></span><span class="host-row-actions"><span class="host-state-dot ${session ? 'on' : ''}"></span>${!session ? `<span class="host-chevron">${icons.chevron}</span>` : ''}</span></button><button type="button" class="host-row-menu" data-menu="${escapeHtml(host.id)}" aria-label="Optionen für ${escapeHtml(host.name)}">${icons.dots}</button></div>`;
   }).join('') : `<div class="side-empty">${query ? 'Keine Treffer.' : 'Noch keine Server gespeichert.'}</div>`;
-  $('#hostList').querySelectorAll('[data-host-id]').forEach(row => row.addEventListener('click', () => selectHost(row.dataset.hostId)));
+  $('#hostList').querySelectorAll('[data-host-id]').forEach(row => row.addEventListener('click', () => openHostOverview(row.dataset.hostId)));
   $('#hostList').querySelectorAll('[data-menu]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); openHostMenu(button.dataset.menu, button); }));
   renderOverview();
 }
@@ -337,11 +343,12 @@ function renderOverview() {
   $('#serverCards').innerHTML = state.hosts.length ? state.hosts.map(host => {
     const session = sessionFor(host.id);
     const tags = Array.isArray(host.tags) ? host.tags : [];
-    return `<article class="server-card"><div class="server-card-top"><div class="server-card-avatar">${icons.server}</div><button class="icon-button host-menu-button" data-menu="${escapeHtml(host.id)}" aria-label="Serveroptionen">${icons.dots}</button></div><div class="server-card-name"><h3>${escapeHtml(host.name)}</h3><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span></div><div class="server-address">${escapeHtml(host.username)}<span>@</span>${escapeHtml(host.host)}<span>:</span>${host.port}</div>${host.description ? `<p class="server-card-description">${escapeHtml(host.description)}</p>` : ''}${tags.length ? `<div class="server-card-tags">${tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</div>` : ''}<div class="server-card-meta"><span>${icons.key}${host.fingerprint ? 'Schlüssel bestätigt' : 'Fingerabdruck beim Erstkontakt'}</span><span>Port ${host.port}</span></div><div class="server-card-bottom"><button class="button ${session ? 'button-secondary' : 'button-primary'} card-connect" data-connect="${escapeHtml(host.id)}">${session ? icons.terminal : icons.arrow}${session ? 'Terminal öffnen' : 'Verbinden'}</button><button class="button icon-square" data-open-files="${escapeHtml(host.id)}" title="Dateien">${icons.files}</button><button class="button icon-square" data-open-monitor="${escapeHtml(host.id)}" title="Monitoring">${icons.chart}</button></div></article>`;
+    return `<article class="server-card"><div class="server-card-top"><div class="server-card-avatar">${icons.server}</div><button class="icon-button host-menu-button" data-menu="${escapeHtml(host.id)}" aria-label="Serveroptionen">${icons.dots}</button></div><button type="button" class="server-card-info" data-overview="${escapeHtml(host.id)}" aria-label="Übersicht für ${escapeHtml(host.name)} öffnen"><span class="server-card-name"><span class="server-card-title">${escapeHtml(host.name)}</span><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span></span><span class="server-address">${escapeHtml(host.username)}<span>@</span>${escapeHtml(host.host)}<span>:</span>${host.port}</span>${host.description ? `<span class="server-card-description">${escapeHtml(host.description)}</span>` : ''}${tags.length ? `<span class="server-card-tags">${tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</span>` : ''}<span class="server-card-meta"><span>${icons.key}${host.fingerprint ? 'Schlüssel bestätigt' : 'Fingerabdruck beim Erstkontakt'}</span><span>Port ${host.port}</span></span></button><div class="server-card-bottom"><button class="button ${session ? 'button-secondary' : 'button-primary'} card-connect" data-connect="${escapeHtml(host.id)}">${session ? icons.terminal : icons.arrow}${session ? 'Terminal öffnen' : 'Verbinden'}</button><button class="button icon-square" data-open-files="${escapeHtml(host.id)}" title="Dateien" aria-label="Dateien">${icons.files}</button><button class="button icon-square" data-open-monitor="${escapeHtml(host.id)}" title="Monitoring" aria-label="Monitoring">${icons.chart}</button></div></article>`;
   }).join('') : `<div class="empty-server-card"><div class="empty-server-icon">${icons.server}</div><div><b>Hier erscheinen deine Server</b><span>Füge eine Verbindung hinzu, um SSH, SFTP und Monitoring zu starten.</span></div><button class="button button-secondary" id="emptyAdd">${icons.plus}Server hinzufügen</button></div>`;
   $('#serverCards').querySelectorAll('[data-connect]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); selectHost(button.dataset.connect); }));
   $('#serverCards').querySelectorAll('[data-open-files]').forEach(button => button.addEventListener('click', () => selectHost(button.dataset.openFiles, 'files')));
   $('#serverCards').querySelectorAll('[data-open-monitor]').forEach(button => button.addEventListener('click', () => selectHost(button.dataset.openMonitor, 'monitoring')));
+  $('#serverCards').querySelectorAll('[data-overview]').forEach(button => button.addEventListener('click', () => openHostOverview(button.dataset.overview)));
   $('#serverCards').querySelectorAll('[data-menu]').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); openHostMenu(button.dataset.menu, button); }));
   $('#emptyAdd')?.addEventListener('click', openHostModal);
 }
@@ -357,20 +364,57 @@ function openHostMenu(hostId, button) {
   anchor.append(menu);
   menu.querySelector('[data-action="connect"]').onclick = () => { menu.remove(); selectHost(hostId); };
   menu.querySelector('[data-action="settings"]').onclick = () => { menu.remove(); selectHostProfile(hostId, 'settings'); };
-  menu.querySelector('[data-action="delete"]').onclick = async () => {
-    menu.remove();
-    if (!confirm(`Server „${host.name}“ aus deinen gespeicherten Verbindungen entfernen?`)) return;
-    try {
-      const session = sessionFor(hostId);
-      if (session) await disconnectSession(session.id);
-      await api(`/api/hosts/${encodeURIComponent(hostId)}`, { method: 'DELETE' });
-      state.hosts = state.hosts.filter(item => item.id !== hostId);
-      if (state.selectedHostId === hostId) state.selectedHostId = state.hosts[0]?.id || null;
-      renderHosts();
-      toast('Server entfernt.');
-    } catch (error) { toast(error.message, 'error'); }
-  };
+  menu.querySelector('[data-action="delete"]').onclick = () => { menu.remove(); void deleteHost(hostId); };
   setTimeout(() => document.addEventListener('click', function closeMenu(event) { if (!menu.contains(event.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } }, { once: true }), 0);
+}
+
+async function deleteHost(hostId) {
+  const host = state.hosts.find(item => item.id === hostId);
+  if (!host || !confirm(`Server „${host.name}“ aus deinen gespeicherten Verbindungen entfernen?`)) return;
+  try {
+    const session = sessionFor(hostId);
+    if (session) await disconnectSession(session.id);
+    await api(`/api/hosts/${encodeURIComponent(hostId)}`, { method: 'DELETE' });
+    state.hosts = state.hosts.filter(item => item.id !== hostId);
+    if (state.selectedHostId === hostId) state.selectedHostId = state.hosts[0]?.id || null;
+    renderHosts();
+    $('#modalRoot').innerHTML = '';
+    toast('Server entfernt.');
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function openHostOverview(hostId) {
+  const host = state.hosts.find(item => item.id === hostId);
+  if (!host) return;
+  setMobileSidebarOpen(false);
+  state.selectedHostId = hostId;
+  renderHosts();
+  const session = sessionFor(hostId);
+  const tags = Array.isArray(host.tags) ? host.tags : [];
+  const modalRoot = $('#modalRoot');
+  modalRoot.innerHTML = `<div class="modal-backdrop host-overview-backdrop"><section class="modal-card host-overview-modal" role="dialog" aria-modal="true" aria-labelledby="hostOverviewTitle"><div class="modal-top"><div><div class="eyebrow">SERVER-ÜBERSICHT</div><h2 id="hostOverviewTitle">${escapeHtml(host.name)}</h2></div><button type="button" class="icon-button modal-close" aria-label="Übersicht schließen">${icons.close}</button></div><p class="host-overview-address">${escapeHtml(host.username)}@${escapeHtml(host.host)}:${host.port}</p><div class="host-overview-status"><span class="server-status ${session ? 'online' : ''}"><i></i>${session ? 'Verbunden' : 'Getrennt'}</span><span>${session ? 'Aktive SSH-Sitzung' : 'Noch keine aktive Sitzung'}</span></div><section class="host-overview-section"><h3>Beschreibung</h3><p>${host.description ? escapeHtml(host.description) : '<span class="host-overview-empty">Keine Beschreibung hinterlegt.</span>'}</p></section><section class="host-overview-section"><h3>Tags</h3><div class="server-card-tags">${tags.length ? tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('') : '<span class="host-overview-empty">Keine Tags hinterlegt.</span>'}</div></section><dl class="host-overview-details"><div><dt>SSH-Port</dt><dd>${host.port}</dd></div><div><dt>Protokoll</dt><dd>SSH</dd></div><div><dt>Host-Schlüssel</dt><dd>${host.fingerprint ? 'Bestätigt' : 'Beim Erstkontakt zu prüfen'}</dd></div></dl><div class="host-overview-actions"><button type="button" class="button button-primary" data-host-action="connect">${session ? icons.terminal : icons.arrow}${session ? 'Terminal öffnen' : 'Verbinden'}</button><button type="button" class="button button-secondary" data-host-action="files">${icons.files}Dateien</button><button type="button" class="button button-secondary" data-host-action="monitoring">${icons.chart}Monitoring</button><button type="button" class="button button-secondary" data-host-action="settings">${icons.settings}Einstellungen</button></div><div class="host-overview-footer"><button type="button" class="button button-danger" data-host-action="delete">${icons.close}Server entfernen</button><button type="button" class="button button-secondary modal-close">Schließen</button></div></section></div>`;
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelectorAll('.modal-close').forEach(button => button.addEventListener('click', close));
+  modalRoot.querySelector('.host-overview-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) close(); });
+  modalRoot.querySelectorAll('[data-host-action]').forEach(button => button.addEventListener('click', () => {
+    const action = button.dataset.hostAction;
+    close();
+    if (action === 'delete') void deleteHost(hostId);
+    else selectHost(hostId, action === 'connect' ? null : action);
+  }));
+  modalRoot.querySelector('.modal-close')?.focus();
+}
+
+function setMobileSidebarOpen(open) {
+  const sidebar = $('#appSidebar');
+  const button = $('#mobileMenu');
+  const backdrop = $('#sidebarBackdrop');
+  sidebar?.classList.toggle('mobile-open', open);
+  if (button) {
+    button.setAttribute('aria-expanded', String(open));
+    button.setAttribute('aria-label', open ? 'Servermenü schließen' : 'Servermenü öffnen');
+  }
+  if (backdrop) backdrop.hidden = !open;
 }
 
 function setRoute(route) {
@@ -413,7 +457,7 @@ function updateConnectionChrome() {
 }
 
 async function selectHost(hostId, targetRoute = null) {
-  $('.sidebar').classList.remove('mobile-open');
+  setMobileSidebarOpen(false);
   const host = state.hosts.find(item => item.id === hostId);
   if (!host) return;
   state.selectedHostId = hostId;
@@ -432,7 +476,7 @@ async function selectHost(hostId, targetRoute = null) {
 function selectHostProfile(hostId, route = 'settings') {
   if (!state.hosts.some(host => host.id === hostId)) return;
   state.selectedHostId = hostId;
-  $('.sidebar').classList.remove('mobile-open');
+  setMobileSidebarOpen(false);
   renderHosts();
   setRoute(route);
 }
@@ -999,12 +1043,34 @@ function bindEvents() {
   $('#helpButton').addEventListener('click', () => toast('Wähle links einen Server aus. Für SSH, Dateiübertragung, Monitoring und Kontosicherheit öffnest du die Dokumentation.'));
   $('#documentationButton').addEventListener('click', openDocumentation);
   $('#settingsButton').addEventListener('click', openAdminSettings);
+  $('#mobileMoreButton').addEventListener('click', () => {
+    const button = $('#mobileMoreButton');
+    const menu = $('#mobileMoreMenu');
+    menu.hidden = !menu.hidden;
+    button.setAttribute('aria-expanded', String(!menu.hidden));
+  });
+  $('#mobileMoreMenu').addEventListener('click', event => {
+    const action = event.target.closest('[data-mobile-action]')?.dataset.mobileAction;
+    if (!action) return;
+    $('#mobileMoreMenu').hidden = true;
+    $('#mobileMoreButton').setAttribute('aria-expanded', 'false');
+    if (action === 'help') $('#helpButton').click();
+    if (action === 'documentation') openDocumentation();
+    if (action === 'settings') openAdminSettings();
+  });
   $('#logoutButton').addEventListener('click', logoutUser);
-  $('#mobileMenu').addEventListener('click', () => $('.sidebar').classList.toggle('mobile-open'));
+  $('#mobileMenu').addEventListener('click', () => setMobileSidebarOpen(!$('.sidebar').classList.contains('mobile-open')));
+  $('#sidebarBackdrop').addEventListener('click', () => setMobileSidebarOpen(false));
   document.addEventListener('keydown', event => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openHostModal(); }
     if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) { event.preventDefault(); $('#hostSearch').focus(); }
-    if (event.key === 'Escape') $('#modalRoot').innerHTML = '';
+    if (event.key === 'Escape') { $('#modalRoot').innerHTML = ''; setMobileSidebarOpen(false); $('#mobileMoreMenu').hidden = true; $('#mobileMoreButton').setAttribute('aria-expanded', 'false'); }
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.mobile-more-wrap')) {
+      $('#mobileMoreMenu').hidden = true;
+      $('#mobileMoreButton').setAttribute('aria-expanded', 'false');
+    }
   });
   window.addEventListener('resize', () => { const entry = state.terminalEntries.get(state.activeId); if (entry && state.route === 'terminal') { entry.fit.fit(); drawCharts(); } });
 }
@@ -1110,6 +1176,8 @@ async function init() {
   try {
     const status = await api('/api/auth/status');
     state.passwordResetEnabled = Boolean(status.passwordResetEnabled);
+    state.adminBootstrapRequired = Boolean(status.adminBootstrapRequired);
+    state.adminBootstrapConfigured = Boolean(status.adminBootstrapConfigured);
   } catch {}
   try {
     const user = await api('/api/auth/me');
@@ -1122,6 +1190,8 @@ async function init() {
     if (error.status === 401) {
       try {
         const status = await api('/api/auth/status');
+        state.adminBootstrapRequired = Boolean(status.adminBootstrapRequired);
+        state.adminBootstrapConfigured = Boolean(status.adminBootstrapConfigured);
         showAuthScreen(status.hasAccounts ? 'login' : 'register');
       } catch (statusError) {
         showAuthScreen('login', `Lokaler Dienst nicht erreichbar: ${statusError.message}`);
