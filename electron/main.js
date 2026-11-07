@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, session } from 'electron';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -11,8 +11,14 @@ const LAUNCHER_FILE = path.join(ROOT, 'connect.html');
 const APP_DATA_DIR = path.join(app.getPath('userData'), 'vault');
 const LEGACY_DATA_DIR = path.join(os.homedir(), '.nexterm');
 const VAULT_KEY_FILE = 'vault-key.dpapi';
+const TITLE_BAR_THEMES = Object.freeze({
+  'material-dark': { color: '#080c25', symbolColor: '#eef2ff' },
+  'material-white': { color: '#f5f8f8', symbolColor: '#172020' },
+  muxxle: { color: '#140b0c', symbolColor: '#f2dfe0' }
+});
 let launcherWindow = null;
 let appWindow = null;
+let windowDragState = null;
 let localServerStarted = false;
 let shuttingDown = false;
 
@@ -93,17 +99,72 @@ function restrictWindowNavigation(window, baseUrl) {
   });
 }
 
+function getWindowChromeOptions() {
+  if (process.platform === 'darwin') return {};
+  return {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { ...TITLE_BAR_THEMES['material-dark'], height: 40 }
+  };
+}
+
+function assertAppWindowSender(event) {
+  if (!appWindow || event.sender !== appWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Ungültige Fenster-Anfrage.');
+  }
+  try {
+    if (new URL(event.senderFrame.url).origin !== new URL(event.sender.getURL()).origin) throw new Error();
+  } catch {
+    throw new Error('Ungültige Fenster-Adresse.');
+  }
+}
+
+function getDraggableWindow(event) {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  if (![appWindow, launcherWindow].includes(senderWindow) || event.senderFrame !== event.sender.mainFrame) return null;
+  return senderWindow;
+}
+
+ipcMain.on('window:drag', (event, action, rawPoint) => {
+  const window = getDraggableWindow(event);
+  if (!window || window.isDestroyed()) return;
+  const point = Number.isFinite(rawPoint?.x) && Number.isFinite(rawPoint?.y)
+    ? { x: Math.round(rawPoint.x), y: Math.round(rawPoint.y) }
+    : null;
+
+  if (action === 'start') {
+    const bounds = window.getBounds();
+    windowDragState = { window, origin: { x: bounds.x, y: bounds.y }, cursor: point || screen.getCursorScreenPoint() };
+    return;
+  }
+  if (action === 'move' && windowDragState?.window === window) {
+    const cursor = point || screen.getCursorScreenPoint();
+    window.setPosition(
+      windowDragState.origin.x + cursor.x - windowDragState.cursor.x,
+      windowDragState.origin.y + cursor.y - windowDragState.cursor.y,
+      false
+    );
+    return;
+  }
+  if (action === 'end' && windowDragState?.window === window) windowDragState = null;
+});
+
 async function createAppWindow(baseUrl) {
+  const { width: workWidth, height: workHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const windowWidth = Math.max(1000, Math.min(2240, Math.floor(workWidth * 0.88)));
+  const windowHeight = Math.max(640, Math.min(1200, Math.floor(workHeight * 0.88)));
   appWindow = new BrowserWindow({
-    width: 1520,
-    height: 960,
-    minWidth: 1160,
-    minHeight: 740,
+    width: windowWidth,
+    height: windowHeight,
+    minWidth: 1000,
+    minHeight: 640,
+    center: true,
     backgroundColor: '#080c25',
-    icon: path.join(ROOT, 'nexterm-app-icon.png'),
+    icon: path.join(ROOT, 'nexterm-app-icon.ico'),
     title: 'NexTerm Desk',
     autoHideMenuBar: true,
+    ...getWindowChromeOptions(),
     webPreferences: {
+      preload: path.join(ROOT, 'app-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -118,21 +179,22 @@ async function createAppWindow(baseUrl) {
     appWindow = null;
     throw error;
   }
-  appWindow.on('closed', () => { appWindow = null; });
+  appWindow.on('closed', () => { if (windowDragState?.window === appWindow) windowDragState = null; appWindow = null; });
 }
 
 async function createLauncher() {
   launcherWindow = new BrowserWindow({
     width: 1160,
     height: 860,
-    minWidth: 900,
-    minHeight: 700,
+    minWidth: 760,
+    minHeight: 600,
     useContentSize: true,
     resizable: true,
     backgroundColor: '#080c25',
-    icon: path.join(ROOT, 'nexterm-app-icon.png'),
+    icon: path.join(ROOT, 'nexterm-app-icon.ico'),
     title: 'NexTerm Desk · Verbindung wählen',
     autoHideMenuBar: true,
+    ...getWindowChromeOptions(),
     webPreferences: {
       preload: path.join(ROOT, 'preload.cjs'),
       contextIsolation: true,
@@ -145,7 +207,10 @@ async function createLauncher() {
     if (nextUrl !== pathToFileURL(LAUNCHER_FILE).href) event.preventDefault();
   });
   await launcherWindow.loadFile(LAUNCHER_FILE);
-  launcherWindow.on('closed', () => { launcherWindow = null; });
+  launcherWindow.on('closed', () => {
+    if (windowDragState?.window === launcherWindow) windowDragState = null;
+    launcherWindow = null;
+  });
 }
 
 ipcMain.handle('launcher:get-settings', async event => {
@@ -204,6 +269,14 @@ ipcMain.handle('launcher:remote', async (event, rawUrl) => {
     event.sender.send('launcher:error', `Webserver konnte nicht geöffnet werden: ${error.message}`);
     return { ok: false };
   }
+});
+
+ipcMain.handle('window:set-theme', (event, theme) => {
+  assertAppWindowSender(event);
+  const colors = TITLE_BAR_THEMES[theme];
+  if (!colors) return false;
+  appWindow.setTitleBarOverlay({ ...colors, height: 40 });
+  return true;
 });
 
 app.on('second-instance', () => {

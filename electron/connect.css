@@ -70,8 +70,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); ou
   background: linear-gradient(145deg, rgba(166, 74, 255, .2), rgba(68, 226, 255, .08));
   color: var(--accent);
 }
-.brand-mark svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.brand-mark img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.brand-mark svg { display: block; width: 100%; height: 100%; border-radius: inherit; }
 .brand-name { color: var(--text); font-size: 19px; font-weight: 650; letter-spacing: -.025em; }
 .brand-name span { margin-left: 5px; color: var(--muted); font-size: 14px; font-weight: 450; }
 .local-pill { display: inline-flex; align-items: center; gap: 9px; margin-left: auto; padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; letter-spacing: .035em; }
@@ -121,8 +120,8 @@ input::placeholder { color: #718096; }
 .action-button:disabled { opacity: .58; cursor: progress; }
 .quiet-button { border-color: var(--line); background: rgba(255,255,255,.035); color: var(--text); }
 .quiet-button:hover:not(:disabled) { border-color: rgba(97,118,255,.5); background: rgba(97,118,255,.1); }
-.primary-button { border-color: transparent; background: linear-gradient(112deg, #a64aff 0%, #6176ff 52%, #44e2ff 100%); color: #080c25; box-shadow: 0 8px 26px rgba(97,118,255,.2); }
-.primary-button:hover:not(:disabled) { background: linear-gradient(112deg, #c47aff 0%, #8797ff 52%, #83edff 100%); box-shadow: 0 10px 30px rgba(97,118,255,.28); }
+.primary-button { border-color: transparent; background: linear-gradient(112deg, #a64aff 0%, #6176ff 100%); color: #080c25; box-shadow: 0 8px 26px rgba(97,118,255,.2); }
+.primary-button:hover:not(:disabled) { background: linear-gradient(112deg, #c47aff 0%, #8797ff 100%); box-shadow: 0 10px 30px rgba(97,118,255,.28); }
 .action-button span { font-size: 19px; font-weight: 450; }
 
 .launch-message { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.04); color: #d6e0e8; font-size: 14px; line-height: 1.5; }
@@ -158,4 +157,18 @@ footer span { color: var(--accent); font-size: 9px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+html.nexterm-electron .shell { padding-top: 54px; }
+html.nexterm-electron .brand {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  cursor: move;
+  user-select: none;
+  padding-right: 180px;
+}
+html.nexterm-electron .brand :is(button, a, input) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  user-select: auto;
 }

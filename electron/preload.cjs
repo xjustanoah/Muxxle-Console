@@ -1,9 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+window.addEventListener('DOMContentLoaded', () => {
+  document.documentElement.classList.add('nexterm-electron');
+}, { once: true });
+
 contextBridge.exposeInMainWorld('nextermLauncher', Object.freeze({
   getSettings: () => ipcRenderer.invoke('launcher:get-settings'),
   useLocalVault: () => ipcRenderer.invoke('launcher:local'),
   connectServer: serverUrl => ipcRenderer.invoke('launcher:remote', serverUrl),
+  dragWindow: (action, point) => {
+    if (['start', 'move', 'end'].includes(action)) ipcRenderer.send('window:drag', action, point);
+  },
   onStatus: callback => {
     const listener = (_event, message) => callback(message);
     ipcRenderer.on('launcher:status', listener);

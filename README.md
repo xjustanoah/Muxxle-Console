@@ -29,7 +29,7 @@ npm install
 npm run dist:win
 ```
 
-Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.3-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
+Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.5-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
 
 - **Lokaler Tresor:** Die Desktop-App öffnet den verschlüsselten Tresor direkt, ohne NexTerm-Konto oder Loginfenster. Serverprofile, Workspaces und Einstellungen bleiben im NexTerm-App-Profil und werden mit AES-256-GCM verschlüsselt. Der zufällige Datenschlüssel wird über Windows DPAPI geschützt. Vorhandene Kontodaten aus `~/.nexterm` werden in den Tresor kopiert.
 - **Webserver:** Gib die HTTPS-Adresse deiner NexTerm-Instanz ein und melde dich dort mit dem Konto dieser Instanz an. Nur die Serveradresse wird für den nächsten Start gemerkt. Passwörter und private SSH-Schlüssel werden nicht in der Desktop-Konfiguration gespeichert.

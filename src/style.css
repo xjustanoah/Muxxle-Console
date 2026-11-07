@@ -1335,6 +1335,12 @@ html[data-theme] .workspace-switch:focus-visible,
 html[data-theme] .host-row-main:focus-visible,
 html[data-theme] .server-card-info:focus-visible { outline-color: var(--accent); }
 
+/* Keep the primary action in the violet-to-blue brand range; cyan remains an accent. */
+html[data-theme] .button-primary { background: linear-gradient(112deg, var(--brand-violet), var(--brand-blue)); border-color: transparent; }
+html[data-theme] .button-primary:hover { background: linear-gradient(112deg, #c47aff, #8797ff); border-color: transparent; }
+
+.app-version { margin-top: 5px; padding: 0 8px; color: var(--dim); font: 500 9px 'DM Mono', monospace; letter-spacing: .035em; text-align: right; }
+
 /* Card details are a single keyboard-accessible target; action buttons stay separate. */
 .server-card-info {
   display: block;
@@ -1421,6 +1427,95 @@ html[data-theme] .server-card-info:focus-visible { outline-color: var(--accent);
   .host-overview-footer { align-items: stretch; flex-direction: column; }
   .host-overview-footer .button { justify-content: center; }
   .host-overview-modal { max-height: calc(100dvh - 24px); padding: 17px; }
+}
+
+@media (min-width: 801px) and (max-width: 1240px) {
+  .topbar-actions { gap: 9px; }
+  .local-badge,
+  .topbar .help-button { display: none; }
+  .mobile-more-wrap { display: block; }
+  .theme-picker > span { display: none; }
+  .theme-picker select { width: 150px; max-width: 28vw; height: 34px; padding-inline: 8px; font-size: 10px; }
+  .page-heading { align-items: flex-start; gap: 14px; }
+  .page-heading h1 { font-size: clamp(24px, 2.5vw, 34px); }
+  .page-heading p { max-width: 58ch; }
+  .heading-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .welcome-grid { grid-template-columns: minmax(0, 1fr); }
+  .overview-side { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+  .quick-tip { grid-column: 1 / -1; }
+}
+
+html.nexterm-electron .topbar {
+  --titlebar-side-padding: 33px;
+  --titlebar-controls-space: max(190px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  cursor: move;
+  user-select: none;
+  padding-left: var(--titlebar-side-padding);
+  padding-right: calc(var(--titlebar-side-padding) + var(--titlebar-controls-space));
+}
+html.nexterm-electron .topbar-actions {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  user-select: auto;
+}
+html.nexterm-electron .topbar :is(button, a, select, input) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  user-select: auto;
+}
+html.nexterm-electron .breadcrumb {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  user-select: none;
+}
+
+@media (min-width: 1100px) {
+  html.nexterm-electron .topbar { --titlebar-side-padding: 40px; }
+}
+@media (max-width: 1100px) {
+  html.nexterm-electron .topbar { --titlebar-side-padding: 22px; }
+}
+@media (max-width: 800px) {
+  html.nexterm-electron .topbar { --titlebar-side-padding: 20px; }
+}
+@media (max-width: 560px) {
+  html.nexterm-electron .topbar { --titlebar-side-padding: 10px; }
+}
+
+/* High-resolution displays need larger controls and a wider working canvas. */
+@media (min-width: 1600px) {
+  body { zoom: 1.1; }
+  .page-content { max-width: 1700px; }
+  .documentation-modal { width: min(100%, 1000px); }
+  .documentation-content h3 { font-size: 15px; }
+  .documentation-content p { font-size: 14px; }
+  .host-overview-modal { width: min(100%, 860px); }
+}
+@media (min-width: 2000px) {
+  body { zoom: 1.15; }
+  .page-content { max-width: 1760px; }
+}
+@media (min-width: 2400px) {
+  body { zoom: 1.2; }
+  .page-content { max-width: 1840px; }
+  .documentation-modal { width: min(100%, 1100px); }
+  .documentation-content h3 { font-size: 16px; }
+  .documentation-content p { font-size: 15px; }
+  .host-overview-modal { width: min(100%, 940px); }
+}
+@media (min-width: 3200px) {
+  body { zoom: 1.25; }
+  .page-content { max-width: 2300px; }
+  .documentation-modal { width: min(100%, 1200px); }
+  .documentation-content p { font-size: 16px; }
+  .host-overview-modal { width: min(100%, 1050px); }
 }
 
 html[data-theme] #settingsButton[hidden],

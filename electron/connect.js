@@ -4,6 +4,30 @@ const remoteForm = document.querySelector('#remoteForm');
 const serverUrl = document.querySelector('#serverUrl');
 const message = document.querySelector('#launchMessage');
 
+const dragHandle = document.querySelector('.brand');
+if (typeof window.nextermLauncher.dragWindow === 'function' && dragHandle) {
+  let dragPointerId = null;
+  const finishDrag = event => {
+    if (event.pointerId !== dragPointerId) return;
+    dragPointerId = null;
+    window.nextermLauncher.dragWindow('end');
+    if (dragHandle.hasPointerCapture(event.pointerId)) dragHandle.releasePointerCapture(event.pointerId);
+  };
+  dragHandle.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target.closest('button, a, input, select, textarea')) return;
+    dragPointerId = event.pointerId;
+    dragHandle.setPointerCapture(dragPointerId);
+    window.nextermLauncher.dragWindow('start', { x: event.screenX, y: event.screenY });
+    event.preventDefault();
+  });
+  dragHandle.addEventListener('pointermove', event => {
+    if (event.pointerId === dragPointerId) window.nextermLauncher.dragWindow('move', { x: event.screenX, y: event.screenY });
+  });
+  dragHandle.addEventListener('pointerup', finishDrag);
+  dragHandle.addEventListener('pointercancel', finishDrag);
+  dragHandle.addEventListener('lostpointercapture', finishDrag);
+}
+
 function setBusy(text) {
   localButton.disabled = true;
   remoteButton.disabled = true;

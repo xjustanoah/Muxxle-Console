@@ -2,7 +2,12 @@ import '@xterm/xterm/css/xterm.css';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
+import packageInfo from '../package.json';
 import './style.css';
+
+// Mark the native renderer before app styles are laid out. The preload repeats
+// this as a fallback, while the browser build stays free of Electron chrome.
+if (window.nextermDesktop) document.documentElement.classList.add('nexterm-electron');
 
 const icons = {
   brand: '<img src="/favicon.png" alt="" />',
@@ -59,6 +64,7 @@ const appMarkup = `
       <div class="sidebar-bottom">
         <div class="local-secure">${icons.lock}<span><b>${isLocalInstance ? 'Lokal verschlüsselt' : 'Webserver-Konto'}</b><small>SSH-Zugänge bleiben flüchtig</small></span><i></i></div>
         <div class="profile-row"><div class="profile-avatar" id="accountAvatar">S</div><div class="profile-copy"><b id="accountName">Lokales Konto</b><small id="accountUsername">Persönliches Konto</small></div><button class="logout-button" id="logoutButton">Abmelden</button></div>
+        <div class="app-version">NexTerm Desk · v${packageInfo.version}</div>
       </div>
     </aside>
     <main class="main-area">
@@ -131,6 +137,8 @@ function terminalThemeFor(theme) {
 function applyTheme(theme) {
   const selected = ACCOUNT_THEMES.includes(theme) ? theme : 'material-dark';
   document.documentElement.dataset.theme = selected;
+  const overlayUpdate = window.nextermDesktop?.setWindowTheme?.(selected);
+  overlayUpdate?.catch?.(() => {});
   for (const entry of state.terminalEntries.values()) entry.terminal.options.theme = terminalThemeFor(selected);
   return selected;
 }
@@ -166,7 +174,7 @@ function showAuthScreen(mode = 'login', errorMessage = '') {
       <main class="auth-main"><section class="auth-card"><div class="auth-mobile-brand"><span class="brand-mark">${icons.brand}</span><span>NEXTERM<small>DESK</small></span></div><div class="auth-card-kicker">${registering ? 'NEUES LOKALES KONTO' : 'SICHERER ZUGANG'}</div><h2>${registering ? 'Konto anlegen' : 'Willkommen zurück'}</h2><p class="auth-card-intro">${registering ? 'Erstelle dein persönliches Konto und verwalte deine eigenen Server.' : 'Melde dich an, um deine Server und Verbindungen zu öffnen.'}</p>
         <form id="appAuthForm" novalidate>${registering ? `<label class="form-field"><span>Anzeigename</span><input name="name" placeholder="Dein Name" autocomplete="name" maxlength="60" required></label><label class="form-field"><span>E-Mail-Adresse</span><input name="email" type="email" placeholder="name@example.com" autocomplete="email" maxlength="254" required></label>${state.adminBootstrapRequired ? `<label class="form-field"><span>Einmaliger Administrator-Startcode</span><input name="adminBootstrapToken" type="password" placeholder="Startcode aus der Serverkonfiguration" autocomplete="off" maxlength="512" required></label><p class="auth-bootstrap-note">${state.adminBootstrapConfigured ? 'Dieser einmalige Code wird nur für das erste Administratorkonto benötigt.' : 'Die Erstregistrierung ist noch gesperrt. Der Betreiber muss NEXTERM_ADMIN_BOOTSTRAP_TOKEN mit mindestens 32 Zeichen in der Serverkonfiguration setzen.'}</p>` : ''}` : ''}<label class="form-field"><span>Benutzername</span><input name="username" placeholder="z. B. alex" autocomplete="username" minlength="3" maxlength="32" required></label><label class="form-field"><span>Passwort${registering ? ' · mindestens 12 Zeichen' : ''}</span><input name="password" type="password" placeholder="${registering ? 'Mindestens 12 Zeichen' : 'Dein Passwort'}" autocomplete="${registering ? 'new-password' : 'current-password'}" ${registering ? 'minlength="12"' : ''} maxlength="256" required></label><div class="auth-form-error" id="authError" ${errorMessage ? '' : 'hidden'}>${escapeHtml(errorMessage)}</div><button class="button button-primary auth-submit" id="authSubmit" type="submit" ${registering && state.adminBootstrapRequired && !state.adminBootstrapConfigured ? 'disabled' : ''}>${registering ? 'Konto erstellen' : 'Anmelden'}${icons.arrow}</button></form>
         ${!registering && state.passwordResetEnabled ? '<button type="button" class="auth-reset-link" id="requestReset">Passwort vergessen?</button>' : ''}<div class="auth-switch">${registering ? 'Schon ein Konto?' : 'Noch kein Konto?'} <button type="button" id="authSwitch">${registering ? 'Anmelden' : 'Konto anlegen'}</button></div><div class="auth-card-security">${icons.lock}<span>Passwörter werden nur als gesalzener Hash gespeichert. Serverzugänge gehören jeweils zu deinem Konto.</span></div>
-      </section><div class="auth-main-foot">${isLocalInstance ? 'Deine Kontodaten bleiben verschlüsselt auf diesem Gerät.' : 'Melde dich mit dem Konto dieser NexTerm-Instanz an.'}</div></main>
+      </section><div class="auth-main-foot">${isLocalInstance ? 'Deine Kontodaten bleiben verschlüsselt auf diesem Gerät.' : 'Melde dich mit dem Konto dieser NexTerm-Instanz an.'}<br>NexTerm Desk · v${packageInfo.version}</div></main>
     </div>`;
 
   $('#authSwitch').addEventListener('click', () => showAuthScreen(registering ? 'login' : 'register'));
@@ -267,6 +275,7 @@ async function mountWorkspace(user) {
   user.theme = applyTheme(user.theme);
   root.classList.remove('auth-screen', 'auth-checking');
   root.innerHTML = appMarkup;
+  enableDesktopWindowDragging($('.topbar'));
   $('#themeSelect').value = user.theme;
   $('#accountName').textContent = user.name;
   $('#accountUsername').textContent = `@${user.username}`;
@@ -283,6 +292,33 @@ async function mountWorkspace(user) {
   bindEvents();
   await loadWorkspace();
   if (!isLocalDesktopVault && (user.mustChangePassword || !user.email)) openAccountModal(Boolean(user.mustChangePassword), !user.email);
+}
+
+function enableDesktopWindowDragging(handle) {
+  const dragWindow = window.nextermDesktop?.dragWindow;
+  if (!handle || typeof dragWindow !== 'function') return;
+
+  let pointerId = null;
+  const finishDrag = event => {
+    if (event.pointerId !== pointerId) return;
+    pointerId = null;
+    dragWindow('end');
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  };
+
+  handle.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target.closest('.topbar-actions, button, a, input, select, textarea, [role="button"]')) return;
+    pointerId = event.pointerId;
+    handle.setPointerCapture(pointerId);
+    dragWindow('start', { x: event.screenX, y: event.screenY });
+    event.preventDefault();
+  });
+  handle.addEventListener('pointermove', event => {
+    if (event.pointerId === pointerId) dragWindow('move', { x: event.screenX, y: event.screenY });
+  });
+  handle.addEventListener('pointerup', finishDrag);
+  handle.addEventListener('pointercancel', finishDrag);
+  handle.addEventListener('lostpointercapture', finishDrag);
 }
 
 async function logoutUser() {

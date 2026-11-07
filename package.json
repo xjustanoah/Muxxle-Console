@@ -1,6 +1,6 @@
 {
   "name": "nexterm-desk",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "SSH, SFTP und Servermonitoring als Desktop-App",
   "author": "NexTerm Desk",
   "private": true,
@@ -52,7 +52,7 @@
       }
     ],
     "win": {
-      "icon": "electron/nexterm-app-icon.png",
+      "icon": "electron/nexterm-app-icon.ico",
       "target": [
         "nsis"
       ],
