@@ -162,8 +162,8 @@ ipcMain.on('window:drag', (event, action, rawPoint) => {
 
 async function createAppWindow(baseUrl) {
   const { width: workWidth, height: workHeight } = screen.getPrimaryDisplay().workAreaSize;
-  const windowWidth = Math.max(1000, Math.min(2240, Math.floor(workWidth * 0.92)));
-  const windowHeight = Math.max(640, Math.min(1400, Math.floor(workHeight * 0.94)));
+  const windowWidth = Math.max(1000, Math.min(3200, Math.floor(workWidth * 0.96)));
+  const windowHeight = Math.max(640, Math.min(1800, Math.floor(workHeight * 0.96)));
   appWindow = new BrowserWindow({
     width: windowWidth,
     height: windowHeight,

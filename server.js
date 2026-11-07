@@ -285,9 +285,21 @@ async function requireAuth(req, res, next) {
 }
 
 function closeSshSession(sshSession) {
-  sessions.delete(sshSession.id);
-  sshSession.closed = true;
+  if (!sshSession || sshSession.closed) return;
+  notifySshSessionClosed(sshSession);
   sshSession.client.end();
+}
+
+function notifySshSessionClosed(sshSession) {
+  if (!sshSession || sshSession.closed) return;
+  sshSession.closed = true;
+  sessions.delete(sshSession.id);
+  const terminalSocket = sshSession.socket;
+  if (terminalSocket?.readyState === WebSocket.OPEN) {
+    terminalSocket.send(JSON.stringify({ type: 'closed' }), () => {
+      if (terminalSocket.readyState === WebSocket.OPEN) terminalSocket.close(1000, 'SSH shell closed');
+    });
+  }
 }
 
 function closeUserSshSessions(userId) {
@@ -1149,15 +1161,11 @@ app.post('/api/sessions', async (req, res) => {
       }
     });
     session.shell.on('close', () => {
-      if (session.socket?.readyState === WebSocket.OPEN) session.socket.send(JSON.stringify({ type: 'closed' }));
+      notifySshSessionClosed(session);
+      session.client.end();
     });
     session.client.on('close', () => {
-      session.closed = true;
-      sessions.delete(id);
-      if (session.socket?.readyState === WebSocket.OPEN) {
-        session.socket.send(JSON.stringify({ type: 'closed' }));
-        session.socket.close();
-      }
+      notifySshSessionClosed(session);
     });
     res.status(201).json({ id, host: session.host, home: session.home });
   } catch (error) {
@@ -1174,11 +1182,7 @@ app.get('/api/sessions', (req, res) => {
 app.delete('/api/sessions/:id', (req, res) => {
   const session = sessions.get(req.params.id);
   if (session && (session.userId !== req.user.id || session.loginToken !== req.loginToken || session.workspaceId !== activeWorkspace(req.user).id)) return res.status(404).json({ error: 'SSH-Sitzung nicht gefunden.' });
-  if (session) {
-    sessions.delete(session.id);
-    session.closed = true;
-    session.client.end();
-  }
+  if (session) closeSshSession(session);
   res.status(204).end();
 });
 
@@ -1364,6 +1368,7 @@ wss.on('connection', (ws, _request, session) => {
   session.socket = ws;
   for (const chunk of session.buffer.splice(0)) if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
   ws.on('message', (data, isBinary) => {
+    if (session.closed || !session.shell || session.shell.destroyed) return;
     const message = data.toString();
     if (!isBinary && message.startsWith('{')) {
       try {

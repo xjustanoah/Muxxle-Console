@@ -210,7 +210,9 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
 .terminal-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 45px; padding: 0 13px; border: 1px solid #292e3a; border-bottom: 0; border-radius: 8px 8px 0 0; background: #171a23; }
 .terminal-host-label { display: flex; align-items: center; gap: 8px; color: #d3d4dd; font-size: 10px; font-weight: 600; }
 .status-dot { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: #63d5a4; box-shadow: 0 0 7px #63d5a488; }
+.status-dot.disconnected { background: #858c9b; box-shadow: none; }
 .connection-lost { color: #ee9c88 !important; }.connection-lost + small { color: #cf8576; }
+.terminal-actions .icon-button:disabled { opacity: .38; cursor: not-allowed; }
 .terminal-host-label small { color: #858d9d; font: 9px 'DM Mono', monospace; }
 .terminal-actions { display: flex; align-items: center; gap: 5px; }
 .terminal-type { margin-right: 5px; color: #747c8c; font: 9px 'DM Mono', monospace; }
@@ -1605,4 +1607,39 @@ html.nexterm-electron .metric-card { min-height: 0; }
   html.nexterm-electron #view-overview .server-card-meta { margin-block: 5px; }
   html.nexterm-electron #view-overview .card-connect { min-height: 31px; }
   html.nexterm-electron .terminal-stage { min-height: 0; }
+}
+
+@media (min-width: 1300px) {
+  html.nexterm-electron .page-content {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: clamp(20px, 2.7vh, 42px) clamp(24px, 2.8vw, 72px) clamp(18px, 2.1vh, 36px);
+  }
+  html.nexterm-electron .page-heading { margin-bottom: clamp(18px, 2vh, 30px); }
+  html.nexterm-electron .page-heading h1 { font-size: clamp(34px, 2.1vw, 50px); }
+  html.nexterm-electron .page-heading p { font-size: clamp(14px, .75vw, 18px); }
+  html.nexterm-electron .route-tabs { height: clamp(44px, 3.7vh, 54px); gap: clamp(20px, 1.6vw, 34px); }
+  html.nexterm-electron .route-tab { font-size: clamp(12px, .62vw, 15px); }
+  html.nexterm-electron #view-overview .welcome-content { max-width: 66%; padding: clamp(24px, 2.6vh, 42px) clamp(26px, 2.5vw, 58px); }
+  html.nexterm-electron #view-overview .welcome-content h2 { font-size: clamp(36px, 2.55vw, 58px); }
+  html.nexterm-electron #view-overview .welcome-content p { max-width: 520px; font-size: clamp(14px, .82vw, 19px); }
+  html.nexterm-electron #view-overview .welcome-kicker { font-size: clamp(10px, .55vw, 13px); }
+  html.nexterm-electron #view-overview .overview-stat-card { padding: clamp(12px, 1.1vw, 22px); }
+  html.nexterm-electron #view-overview .stat-label { font-size: clamp(9px, .48vw, 12px); }
+  html.nexterm-electron #view-overview .stat-number { font-size: clamp(26px, 1.65vw, 40px); }
+  html.nexterm-electron #view-overview .stat-foot { font-size: clamp(9px, .5vw, 13px); }
+  html.nexterm-electron #view-overview .quick-tip { padding: clamp(11px, .9vw, 18px); }
+  html.nexterm-electron #view-overview .quick-tip b { font-size: clamp(10px, .56vw, 14px); }
+  html.nexterm-electron #view-overview .quick-tip p { font-size: clamp(9px, .5vw, 13px); }
+  html.nexterm-electron #view-overview .section-title-row h2 { font-size: clamp(17px, .95vw, 23px); }
+  html.nexterm-electron #view-overview .server-cards { grid-template-columns: repeat(auto-fill, minmax(280px, 390px)); gap: clamp(12px, .8vw, 20px); }
+  html.nexterm-electron #view-overview .server-card { padding: clamp(14px, .9vw, 22px); }
+  html.nexterm-electron #view-overview .server-card-name h3 { font-size: clamp(14px, .72vw, 18px); }
+  html.nexterm-electron #view-overview .server-address { font-size: clamp(10px, .52vw, 13px); }
+  html.nexterm-electron #view-overview .server-card-meta { font-size: clamp(9px, .48vw, 12px); }
+  html.nexterm-electron #view-overview .card-connect { min-height: clamp(36px, 2.3vw, 48px); font-size: clamp(11px, .58vw, 15px); }
+  html.nexterm-electron #view-overview .feature-item { gap: clamp(10px, .7vw, 18px); padding: clamp(12px, .9vw, 20px); }
+  html.nexterm-electron #view-overview .feature-item b { font-size: clamp(11px, .58vw, 15px); }
+  html.nexterm-electron #view-overview .feature-item small { font-size: clamp(10px, .5vw, 13px); }
 }

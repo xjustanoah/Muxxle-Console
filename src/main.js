@@ -39,7 +39,7 @@ const icons = {
 const state = {
   user: null, workspaces: [], activeWorkspaceId: null, passwordResetEnabled: false,
   adminBootstrapRequired: false, adminBootstrapConfigured: false,
-  hosts: [], sessions: [], activeId: null, selectedHostId: null, route: 'overview', query: '',
+  hosts: [], sessions: [], activeId: null, selectedHostId: null, closedTerminalHost: null, route: 'overview', query: '',
   metrics: [], metricsSession: null, latestMetrics: null,
   filePath: '', fileSession: null, files: [],
   terminalEntries: new Map(), monitorTimer: null
@@ -444,20 +444,26 @@ function setRoute(route) {
 
 function updateConnectionChrome() {
   const session = activeSession();
+  const closedHost = !session && state.route === 'terminal' ? state.closedTerminalHost : null;
   const indicator = $('#connectionIndicator');
   indicator.classList.toggle('connected', Boolean(session));
   indicator.innerHTML = session ? `<span></span>${escapeHtml(session.host.name)} verbunden` : '<span></span>Keine aktive Verbindung';
   $('#termTabDot').classList.toggle('visible', Boolean(session));
   $('#quickTerminal').disabled = !session;
+  $('#disconnectButton').disabled = !session;
+  $('.terminal-toolbar .status-dot').classList.toggle('disconnected', !session);
   if (session) {
+    state.closedTerminalHost = null;
     $('#terminalHostName').textContent = session.host.name;
     $('#terminalHostAddress').textContent = `${session.host.username}@${session.host.host}`;
+    $('#terminalHostName').classList.remove('connection-lost');
     $('#fileHostName').textContent = session.host.name;
     $('#monitorHostName').textContent = session.host.name;
     $('#filePathLabel').textContent = state.fileSession === session.id ? state.filePath : session.home;
   } else {
-    $('#terminalHostName').textContent = 'Kein Server verbunden';
-    $('#terminalHostAddress').textContent = '';
+    $('#terminalHostName').textContent = closedHost ? `${closedHost.name} · Sitzung beendet` : 'Kein Server verbunden';
+    $('#terminalHostAddress').textContent = closedHost ? `${closedHost.username}@${closedHost.host}` : '';
+    $('#terminalHostName').classList.toggle('connection-lost', Boolean(closedHost));
     $('#fileHostName').textContent = 'Server auswählen';
     $('#monitorHostName').textContent = 'Server auswählen';
     $('#filePathLabel').textContent = '—';
@@ -471,6 +477,7 @@ async function selectHost(hostId, targetRoute = null) {
   state.selectedHostId = hostId;
   const existing = sessionFor(hostId);
   if (existing) {
+    state.closedTerminalHost = null;
     state.activeId = existing.id;
     if (state.metricsSession !== existing.id) resetMetrics(existing.id);
     updateConnectionChrome();
@@ -616,6 +623,7 @@ function openAuthModal(host, targetRoute) {
       }
       state.sessions.push(result);
       state.activeId = result.id;
+      state.closedTerminalHost = null;
       state.selectedHostId = host.id;
       resetMetrics(result.id);
       renderHosts();
@@ -782,6 +790,16 @@ function ensureTerminal(session) {
   const terminalHost = $('#terminalHost');
   let entry = state.terminalEntries.get(session.id);
   if (!entry) {
+    for (const [sessionId, previous] of state.terminalEntries) {
+      if (!previous.closed) continue;
+      previous.resizeObserver.disconnect();
+      previous.socket.close();
+      previous.terminal.dispose();
+      previous.layer.remove();
+      state.terminalEntries.delete(sessionId);
+    }
+  }
+  if (!entry) {
     const layer = document.createElement('div');
     layer.className = 'terminal-layer';
     layer.dataset.session = session.id;
@@ -799,13 +817,24 @@ function ensureTerminal(session) {
       if (typeof data === 'string' && data.startsWith('{')) {
         try {
           const parsed = JSON.parse(data);
-          if (parsed.type === 'closed') { terminal.write('\r\n\x1b[90m[Verbindung geschlossen]\x1b[0m\r\n'); return; }
+          if (parsed.type === 'closed') {
+            if (!entry?.closed && !entry?.closing) {
+              terminal.write('\r\n\x1b[90m[Verbindung geschlossen]\x1b[0m\r\n');
+              handleSessionClosed(session.id);
+            }
+            return;
+          }
         } catch {}
       }
       if (data instanceof ArrayBuffer) data = new TextDecoder().decode(data);
       terminal.write(data);
     };
-    socket.onclose = () => { if (state.sessions.some(item => item.id === session.id)) $('#terminalHostName').classList.add('connection-lost'); };
+    socket.onclose = () => {
+      if (entry?.closing || !state.sessions.some(item => item.id === session.id)) return;
+      terminal.write('\r\n\x1b[90m[Verbindung zum Terminaldienst unterbrochen]\x1b[0m\r\n');
+      handleSessionClosed(session.id);
+      api(`/api/sessions/${encodeURIComponent(session.id)}`, { method: 'DELETE' }).catch(() => {});
+    };
     terminal.onData(data => { if (socket.readyState === WebSocket.OPEN) socket.send(new TextEncoder().encode(data)); });
     const resizeObserver = new ResizeObserver(() => {
       if (state.activeId !== session.id || state.route !== 'terminal') return;
@@ -814,7 +843,7 @@ function ensureTerminal(session) {
       $('#terminalSize').textContent = `${terminal.cols} × ${terminal.rows}`;
     });
     resizeObserver.observe(terminalHost);
-    entry = { layer, terminal, fit, socket, resizeObserver };
+    entry = { layer, terminal, fit, socket, resizeObserver, closed: false, closing: false };
     state.terminalEntries.set(session.id, entry);
   }
   terminalHost.querySelectorAll('.terminal-layer').forEach(layer => { layer.hidden = layer.dataset.session !== session.id; });
@@ -823,14 +852,37 @@ function ensureTerminal(session) {
   requestAnimationFrame(() => { entry.fit.fit(); entry.terminal.focus(); $('#terminalSize').textContent = `${entry.terminal.cols} × ${entry.terminal.rows}`; });
 }
 
+function handleSessionClosed(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session) return;
+  state.sessions = state.sessions.filter(item => item.id !== sessionId);
+  const entry = state.terminalEntries.get(sessionId);
+  if (entry) {
+    entry.closed = true;
+    entry.terminal.options.disableStdin = true;
+    entry.resizeObserver.disconnect();
+  }
+  if (state.activeId === sessionId) {
+    state.activeId = state.sessions.at(-1)?.id || null;
+    resetMetrics(state.activeId);
+  }
+  if (!state.activeId && !state.sessions.length) state.closedTerminalHost = session.host;
+  renderHosts();
+  updateConnectionChrome();
+  if (state.route === 'terminal' && activeSession()) ensureTerminal(activeSession());
+  toast(`Die SSH-Sitzung zu „${session.host.name}“ wurde beendet.`);
+}
+
 async function disconnectSession(sessionId) {
   const session = state.sessions.find(item => item.id === sessionId);
   if (!session) return;
+  const entry = state.terminalEntries.get(sessionId);
+  if (entry) entry.closing = true;
   try { await api(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }); } catch {}
   state.sessions = state.sessions.filter(item => item.id !== sessionId);
-  const entry = state.terminalEntries.get(sessionId);
-  if (entry) { entry.resizeObserver.disconnect(); entry.terminal.dispose(); entry.layer.remove(); state.terminalEntries.delete(sessionId); }
+  if (entry) { entry.resizeObserver.disconnect(); entry.socket.close(); entry.terminal.dispose(); entry.layer.remove(); state.terminalEntries.delete(sessionId); }
   if (state.activeId === sessionId) {
+    state.closedTerminalHost = null;
     state.activeId = state.sessions.at(-1)?.id || null;
     resetMetrics(state.activeId);
     if (state.route !== 'overview' && !state.activeId) setRoute('overview');
@@ -1047,7 +1099,7 @@ function bindEvents() {
   dropZone.addEventListener('drop', event => { event.preventDefault(); dropZone.classList.remove('drag-over'); beginUpload(event.dataTransfer?.files || []); });
   $('#cancelUpload').addEventListener('click', () => state.currentUpload?.abort());
   $('#disconnectButton').addEventListener('click', () => { const session = activeSession(); if (session) disconnectSession(session.id).then(() => toast('Verbindung getrennt.')); });
-  $('#clearTerminal').addEventListener('click', () => { const entry = state.terminalEntries.get(state.activeId); entry?.terminal.clear(); entry?.terminal.focus(); });
+  $('#clearTerminal').addEventListener('click', () => { const entry = state.terminalEntries.get(state.activeId) || [...state.terminalEntries.values()].find(item => item.closed); entry?.terminal.clear(); entry?.terminal.focus(); });
   $('#helpButton').addEventListener('click', () => toast('Wähle links einen Server aus. Für SSH, Dateiübertragung, Monitoring und Kontosicherheit öffnest du die Dokumentation.'));
   $('#documentationButton').addEventListener('click', openDocumentation);
   $('#settingsButton').addEventListener('click', openAdminSettings);
@@ -1091,6 +1143,7 @@ async function loadWorkspace() {
     renderWorkspaceButton();
     state.hosts = hosts;
     state.sessions = sessions;
+    state.closedTerminalHost = null;
     state.activeId = sessions.at(-1)?.id || null;
     state.selectedHostId = sessions.at(-1)?.host.id || null;
     renderHosts();
