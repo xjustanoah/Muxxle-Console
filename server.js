@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import express from 'express';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { Client } from 'ssh2';
 import { WebSocketServer, WebSocket } from 'ws';
 import nodemailer from 'nodemailer';
@@ -103,6 +104,27 @@ async function writeStoredJson(filePath, value) {
 
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.TRUST_PROXY === '1');
+// Count every HTTP request before parsing bodies, reading accounts, or serving files.
+// The fixed-key outer budget also bounds the inner store's number of IP entries.
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 6000,
+  keyGenerator: () => 'server',
+  identifier: 'http-server',
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Der Server erhält zu viele Anfragen. Bitte versuche es in Kürze erneut.' }
+}));
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 600,
+  identifier: 'http-ip',
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  // TRUST_PROXY=1 is an explicit deployment option; only use behind a filtering proxy.
+  validate: { trustProxy: false },
+  message: { error: 'Zu viele Anfragen. Bitte warte kurz und versuche es erneut.' }
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', (_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -248,7 +270,7 @@ function requireSameOrigin(req, res, next) {
 
 function allowAuthRequest(req, res, action, limit, windowMs, identity) {
   const now = Date.now();
-  const keySpecs = [{ key: `${action}:ip:${req.ip || 'local'}`, overflowKey: `overflow:${action}:ip` }];
+  const keySpecs = [{ key: `${action}:ip:${ipKeyGenerator(req.ip || 'local')}`, overflowKey: `overflow:${action}:ip` }];
   if (identity !== undefined && identity !== null && identity !== '') keySpecs.push({ key: `${action}:identity:${identity}`, overflowKey: `overflow:${action}:identity` });
   let missingKeys = keySpecs.filter(({ key }) => !authRateLimits.has(key)).length;
   if (authRateLimits.size + missingKeys > AUTH_RATE_LIMIT_REGULAR_MAX_KEYS) {
@@ -668,6 +690,14 @@ function passwordResetEnabled() {
     && Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && publicBaseUrl());
 }
 
+export function isValidEmail(email) {
+  if (typeof email !== 'string' || !email || email.length > 254 || /\s/.test(email)) return false;
+  const at = email.indexOf('@');
+  if (at <= 0 || at !== email.lastIndexOf('@')) return false;
+  const dot = email.indexOf('.', at + 2);
+  return dot !== -1 && dot < email.length - 1;
+}
+
 function publicBaseUrl() {
   try {
     const url = new URL(process.env.NEXTERM_PUBLIC_URL || '');
@@ -705,7 +735,7 @@ app.post('/api/auth/register', rateLimitSensitiveAction('register', 10, 60 * 60 
   if (typeof password !== 'string' || password.length < 12 || password.length > 256) {
     return res.status(400).json({ error: 'Das Passwort muss mindestens 12 Zeichen lang sein.' });
   }
-  if (typeof email !== 'string' || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+  if (typeof email !== 'string' || !isValidEmail(email.trim())) {
     return res.status(400).json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' });
   }
   try {
@@ -762,7 +792,7 @@ app.post('/api/auth/login', rateLimitSensitiveAction('login', 25, 5 * 60 * 1000,
   const identifier = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
   if (password.length > 256) return res.status(400).json({ error: 'Das Passwort ist zu lang.' });
-  const attemptKey = `${req.ip || 'local'}:${identifier}`;
+  const attemptKey = `${ipKeyGenerator(req.ip || 'local')}:${identifier}`;
   const attempt = loginAttempts.get(attemptKey);
   if (attempt?.blockedUntil > Date.now()) {
     return res.status(429).json({ error: 'Zu viele Versuche. Bitte warte 15 Minuten und versuche es erneut.' });
@@ -881,7 +911,7 @@ app.post('/api/auth/change-password', requireAuth, rateLimitSensitiveAction('cha
 app.post('/api/auth/change-email', requireAuth, rateLimitSensitiveAction('change-email', 5, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const currentPassword = String(req.body?.currentPassword || '');
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' });
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' });
   const candidate = await derivePassword(currentPassword, Buffer.from(req.user.passwordSalt, 'hex'));
   const stored = Buffer.from(req.user.passwordHash, 'hex');
   if (stored.length !== candidate.length || !crypto.timingSafeEqual(stored, candidate)) return res.status(403).json({ error: 'Das Passwort stimmt nicht.' });
