@@ -1,6 +1,8 @@
 # NexTerm Desk
 
-Eine lokale SSH-Arbeitsoberfläche für Serververbindungen, ein interaktives Terminal, SFTP-Dateiübertragung und Linux-Servermonitoring.
+Eine von [xjustanoah](https://github.com/xjustanoah) entwickelte SSH-Arbeitsoberfläche für Windows und Web: Serververbindungen, interaktives Terminal, SFTP-Dateiübertragung und Linux-Servermonitoring.
+
+**Windows-Installer:** [NexTerm Desk 0.2.9 herunterladen](https://github.com/xjustanoah/NexTerm/releases/tag/v0.2.9)
 
 ## Starten
 
@@ -29,7 +31,7 @@ npm install
 npm run dist:win
 ```
 
-Der Installer liegt anschließend unter `release/NexTerm-Desk-0.2.5-Setup.exe`. Beim Start kannst du zwischen zwei Betriebsarten wählen:
+Der Installer liegt anschließend im Ordner `release/`. Einen fertigen Installer findest du außerdem auf der [GitHub-Releases-Seite](https://github.com/xjustanoah/NexTerm/releases). Beim Start kannst du zwischen zwei Betriebsarten wählen:
 
 - **Lokaler Tresor:** Die Desktop-App öffnet den verschlüsselten Tresor direkt, ohne NexTerm-Konto oder Loginfenster. Serverprofile, Workspaces und Einstellungen bleiben im NexTerm-App-Profil und werden mit AES-256-GCM verschlüsselt. Der zufällige Datenschlüssel wird über Windows DPAPI geschützt. Vorhandene Kontodaten aus `~/.nexterm` werden in den Tresor kopiert.
 - **Webserver:** Gib die HTTPS-Adresse deiner NexTerm-Instanz ein und melde dich dort mit dem Konto dieser Instanz an. Nur die Serveradresse wird für den nächsten Start gemerkt. Passwörter und private SSH-Schlüssel werden nicht in der Desktop-Konfiguration gespeichert.
@@ -81,3 +83,7 @@ Der lokale Webdienst bindet standardmäßig an `127.0.0.1`. Benutzerkonten und d
 Lokale App-Konten bleiben im verschlüsselten Tresor dieses Geräts. Webserver-Konten und ihre Workspaces werden verschlüsselt auf der NexTerm-Instanz gespeichert. E-Mail-Adressen werden bei der Registrierung nicht verifiziert; aktiviere E-Mail-Resets erst, wenn SMTP und die feste öffentliche URL eingerichtet sind.
 
 Die Anwendung enthält noch keine Auto-Updates, Team-Synchronisierung, Agent-Weiterleitung oder Unterstützung für Windows/FreeBSD-Servermonitoring.
+
+## Lizenz und Urheberschaft
+
+NexTerm Desk und die dazugehörigen eigenen Projektdateien wurden von **xjustanoah** erstellt. Der Quellcode wird unter einer eingeschränkten, nicht von der OSI anerkannten Lizenz veröffentlicht. Du darfst das Projekt nicht als dein eigenes ausgeben oder verkaufen. Die Bedingungen für private Nutzung, Weitergabe und kommerzielle Nutzung stehen in [LICENSE](LICENSE). Drittanbieter-Abhängigkeiten unterliegen ihren jeweiligen Lizenzen.

@@ -1,8 +1,9 @@
 {
   "name": "nexterm-desk",
   "version": "0.2.9",
-  "description": "SSH, SFTP und Servermonitoring als Desktop-App",
-  "author": "NexTerm Desk",
+  "description": "SSH, SFTP und Linux-Servermonitoring für Windows und Web",
+  "author": "xjustanoah",
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
