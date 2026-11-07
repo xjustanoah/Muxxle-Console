@@ -128,21 +128,33 @@ ipcMain.on('window:drag', (event, action, rawPoint) => {
   const window = getDraggableWindow(event);
   if (!window || window.isDestroyed()) return;
   const point = Number.isFinite(rawPoint?.x) && Number.isFinite(rawPoint?.y)
-    ? { x: Math.round(rawPoint.x), y: Math.round(rawPoint.y) }
+    ? { x: rawPoint.x, y: rawPoint.y }
     : null;
 
   if (action === 'start') {
     const bounds = window.getBounds();
-    windowDragState = { window, origin: { x: bounds.x, y: bounds.y }, cursor: point || screen.getCursorScreenPoint() };
+    const scaleFactor = screen.getDisplayMatching(bounds).scaleFactor || 1;
+    const cursor = point
+      ? { x: point.x / scaleFactor, y: point.y / scaleFactor }
+      : screen.getCursorScreenPoint();
+    windowDragState = {
+      window,
+      origin: { x: bounds.x, y: bounds.y },
+      size: { width: bounds.width, height: bounds.height },
+      cursor,
+      scaleFactor
+    };
     return;
   }
   if (action === 'move' && windowDragState?.window === window) {
-    const cursor = point || screen.getCursorScreenPoint();
-    window.setPosition(
-      windowDragState.origin.x + cursor.x - windowDragState.cursor.x,
-      windowDragState.origin.y + cursor.y - windowDragState.cursor.y,
-      false
-    );
+    const cursor = point
+      ? { x: point.x / windowDragState.scaleFactor, y: point.y / windowDragState.scaleFactor }
+      : screen.getCursorScreenPoint();
+    window.setBounds({
+      x: Math.round(windowDragState.origin.x + cursor.x - windowDragState.cursor.x),
+      y: Math.round(windowDragState.origin.y + cursor.y - windowDragState.cursor.y),
+      ...windowDragState.size
+    }, false);
     return;
   }
   if (action === 'end' && windowDragState?.window === window) windowDragState = null;
