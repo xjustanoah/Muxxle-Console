@@ -34,10 +34,15 @@ const loginAttempts = new Map();
 const authRateLimits = new Map();
 const loginChallenges = new Map();
 const webAuthnChallenges = new Map();
+const activeSecurityOperations = new Set();
+const activeSensitiveKdfUsers = new Set();
+let activeSensitiveKdfCount = 0;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const AUTH_RATE_LIMIT_MAX_KEYS = 10000;
+const AUTH_RATE_LIMIT_REGULAR_MAX_KEYS = AUTH_RATE_LIMIT_MAX_KEYS - 64;
+const MAX_SENSITIVE_KDF_CONCURRENCY = 4;
 const STORE_FORMAT = 'nexterm-encrypted-json';
 const ACCOUNT_THEMES = new Set(['material-dark', 'material-white', 'muxxle']);
 let activeHost = DEFAULT_HOST;
@@ -241,23 +246,62 @@ function requireSameOrigin(req, res, next) {
   }
 }
 
-function allowAuthRequest(req, res, action, limit, windowMs) {
+function allowAuthRequest(req, res, action, limit, windowMs, identity) {
   const now = Date.now();
-  const key = `${action}:${req.ip || 'local'}`;
-  let entry = authRateLimits.get(key);
-  if (!entry || entry.resetAt <= now) entry = { count: 0, resetAt: now + windowMs };
-  entry.count++;
-  authRateLimits.set(key, entry);
-  if (authRateLimits.size > AUTH_RATE_LIMIT_MAX_KEYS) {
+  const keySpecs = [{ key: `${action}:ip:${req.ip || 'local'}`, overflowKey: `overflow:${action}:ip` }];
+  if (identity !== undefined && identity !== null && identity !== '') keySpecs.push({ key: `${action}:identity:${identity}`, overflowKey: `overflow:${action}:identity` });
+  let missingKeys = keySpecs.filter(({ key }) => !authRateLimits.has(key)).length;
+  if (authRateLimits.size + missingKeys > AUTH_RATE_LIMIT_REGULAR_MAX_KEYS) {
     for (const [existingKey, value] of authRateLimits) {
       if (value.resetAt <= now) authRateLimits.delete(existingKey);
-      if (authRateLimits.size <= AUTH_RATE_LIMIT_MAX_KEYS) break;
     }
-    if (authRateLimits.size > AUTH_RATE_LIMIT_MAX_KEYS) authRateLimits.delete(authRateLimits.keys().next().value);
+    missingKeys = keySpecs.filter(({ key }) => !authRateLimits.has(key)).length;
   }
-  if (entry.count <= limit) return true;
+  let keys = keySpecs.map(({ key }) => key);
+  if (authRateLimits.size + missingKeys > AUTH_RATE_LIMIT_REGULAR_MAX_KEYS) {
+    keys = keySpecs.map(({ key, overflowKey }) => authRateLimits.has(key) ? key : overflowKey);
+    const additionalOverflowKeys = new Set(keys.filter(key => !authRateLimits.has(key))).size;
+    if (authRateLimits.size + additionalOverflowKeys > AUTH_RATE_LIMIT_MAX_KEYS) {
+      res.status(429).json({ error: 'Zu viele Anfragen. Bitte warte kurz und versuche es erneut.' });
+      return false;
+    }
+  }
+  let allowed = true;
+  for (const key of keys) {
+    let entry = authRateLimits.get(key);
+    if (!entry || entry.resetAt <= now) entry = { count: 0, resetAt: now + windowMs };
+    entry.count++;
+    authRateLimits.set(key, entry);
+    if (entry.count > limit) allowed = false;
+  }
+  // Overflow buckets preserve active counters while keeping attacker-controlled key growth bounded.
+  if (allowed) return true;
   res.status(429).json({ error: 'Zu viele Anfragen. Bitte warte kurz und versuche es erneut.' });
   return false;
+}
+
+function withSensitiveKdf(handler, identityForRequest = req => req.user?.id) {
+  return async (req, res, next) => {
+    const identity = identityForRequest(req);
+    if ((identity && activeSensitiveKdfUsers.has(identity)) || activeSensitiveKdfCount >= MAX_SENSITIVE_KDF_CONCURRENCY) {
+      return res.status(429).json({ error: 'Eine Sicherheitsprüfung läuft bereits. Bitte warte kurz und versuche es erneut.' });
+    }
+    if (identity) activeSensitiveKdfUsers.add(identity);
+    activeSensitiveKdfCount++;
+    try {
+      return await handler(req, res, next);
+    } finally {
+      if (identity) activeSensitiveKdfUsers.delete(identity);
+      activeSensitiveKdfCount = Math.max(0, activeSensitiveKdfCount - 1);
+    }
+  };
+}
+
+function rateLimitSensitiveAction(action, limit, windowMs, identityForRequest = req => req.user?.id) {
+  return (req, res, next) => {
+    if (!allowAuthRequest(req, res, action, limit, windowMs, identityForRequest(req))) return;
+    next();
+  };
 }
 
 async function requireAuth(req, res, next) {
@@ -348,7 +392,10 @@ const authExpiryTimer = setInterval(() => {
     if (limit.resetAt <= Date.now()) authRateLimits.delete(key);
   }
   for (const [token, challenge] of loginChallenges) {
-    if (challenge.expiresAt <= Date.now()) loginChallenges.delete(token);
+    if (challenge.expiresAt <= Date.now()) {
+      loginChallenges.delete(token);
+      webAuthnChallenges.delete(`login:${token}`);
+    }
   }
   for (const [key, challenge] of webAuthnChallenges) {
     if (challenge.expiresAt <= Date.now()) webAuthnChallenges.delete(key);
@@ -576,7 +623,10 @@ function authChallengeFromRequest(req, res) {
   const token = parseCookies(req.headers.cookie).nexterm_challenge;
   const challenge = token && loginChallenges.get(token);
   if (!challenge || challenge.expiresAt <= Date.now()) {
-    if (token) loginChallenges.delete(token);
+    if (token) {
+      loginChallenges.delete(token);
+      webAuthnChallenges.delete(`login:${token}`);
+    }
     clearCookie(res, 'nexterm_challenge');
     return null;
   }
@@ -586,7 +636,7 @@ function authChallengeFromRequest(req, res) {
 function setLoginChallenge(req, res, user) {
   const token = crypto.randomBytes(32).toString('base64url');
   const activePasskeys = (user.passkeys || []).filter(entry => entry.enabled);
-  loginChallenges.set(token, { userId: user.id, attempts: 0, expiresAt: Date.now() + 5 * 60 * 1000 });
+  loginChallenges.set(token, { userId: user.id, attempts: 0, passkeyOptionsAttempts: 0, passkeyAttempts: 0, expiresAt: Date.now() + 5 * 60 * 1000 });
   setCookie(req, res, 'nexterm_challenge', token, 300);
   return { factorRequired: true, methods: { otp: Boolean(user.totpEnabled), passkey: activePasskeys.length > 0, recovery: Boolean(user.totpEnabled || activePasskeys.length) } };
 }
@@ -644,8 +694,7 @@ app.get('/api/auth/status', async (_req, res) => {
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json(publicUser(req.user)));
 
-app.post('/api/auth/register', async (req, res) => {
-  if (!allowAuthRequest(req, res, 'register', 10, 60 * 60 * 1000)) return;
+app.post('/api/auth/register', rateLimitSensitiveAction('register', 10, 60 * 60 * 1000, () => undefined), withSensitiveKdf(async (req, res) => {
   const { name, username, password, email } = req.body || {};
   if (typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
     return res.status(400).json({ error: 'Bitte gib einen Namen mit maximal 60 Zeichen ein.' });
@@ -707,10 +756,9 @@ app.post('/api/auth/register', async (req, res) => {
   } catch {
     res.status(500).json({ error: 'Konto konnte nicht angelegt werden.' });
   }
-});
+}));
 
-app.post('/api/auth/login', async (req, res) => {
-  if (!allowAuthRequest(req, res, 'login', 25, 5 * 60 * 1000)) return;
+app.post('/api/auth/login', rateLimitSensitiveAction('login', 25, 5 * 60 * 1000, () => undefined), withSensitiveKdf(async (req, res) => {
   const identifier = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
   if (password.length > 256) return res.status(400).json({ error: 'Das Passwort ist zu lang.' });
@@ -745,7 +793,7 @@ app.post('/api/auth/login', async (req, res) => {
   } catch {
     res.status(500).json({ error: 'Anmeldung gerade nicht möglich.' });
   }
-});
+}));
 
 app.post('/api/auth/verify-factor', async (req, res) => {
   const current = authChallengeFromRequest(req, res);
@@ -791,9 +839,7 @@ app.post('/api/auth/request-reset', async (req, res) => {
   } catch { res.json(generic); }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
-  if (!passwordResetEnabled()) return res.status(404).json({ error: 'Passwortzurücksetzung ist deaktiviert.' });
-  if (!allowAuthRequest(req, res, 'reset-password', 10, 15 * 60 * 1000)) return;
+app.post('/api/auth/reset-password', (req, res, next) => passwordResetEnabled() ? next() : res.status(404).json({ error: 'Passwortzurücksetzung ist deaktiviert.' }), rateLimitSensitiveAction('reset-password', 10, 15 * 60 * 1000, () => undefined), withSensitiveKdf(async (req, res) => {
   const token = String(req.body?.token || '');
   const password = String(req.body?.password || '');
   if (password.length < 12 || password.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
@@ -812,9 +858,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
     for (const [sessionToken, session] of loginSessions) if (session.userId === user.id) loginSessions.delete(sessionToken);
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Passwort konnte nicht zurückgesetzt werden.' }); }
-});
+}));
 
-app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+app.post('/api/auth/change-password', requireAuth, rateLimitSensitiveAction('change-password', 5, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   const currentPassword = String(req.body?.currentPassword || '');
   const newPassword = String(req.body?.newPassword || '');
   if (newPassword.length < 12 || newPassword.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
@@ -830,9 +876,9 @@ app.post('/api/auth/change-password', requireAuth, async (req, res) => {
   for (const [token, session] of loginSessions) if (session.userId === req.user.id && token !== req.loginToken) loginSessions.delete(token);
   closeUserSshSessionsExcept(req.user.id, req.loginToken);
   res.json({ ok: true, user: publicUser(req.user) });
-});
+}));
 
-app.post('/api/auth/change-email', requireAuth, async (req, res) => {
+app.post('/api/auth/change-email', requireAuth, rateLimitSensitiveAction('change-email', 5, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const currentPassword = String(req.body?.currentPassword || '');
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' });
@@ -844,7 +890,7 @@ app.post('/api/auth/change-email', requireAuth, async (req, res) => {
   req.user.passwordResetExpiresAt = null;
   await writeData(req.data);
   res.json({ ok: true, user: publicUser(req.user) });
-});
+}));
 
 app.patch('/api/auth/preferences', requireAuth, async (req, res) => {
   const theme = String(req.body?.theme || '');
@@ -858,40 +904,75 @@ app.get('/api/auth/security', requireAuth, async (req, res) => {
   res.json({ totpEnabled: Boolean(req.user.totpEnabled), passkeys: (req.user.passkeys || []).filter(entry => entry.enabled).map(entry => ({ id: entry.id, name: entry.name || 'Passkey' })), recoveryCodesRemaining: (req.user.recoveryCodes || []).length });
 });
 
-app.post('/api/auth/totp/setup', requireAuth, async (req, res) => {
+app.post('/api/auth/totp/setup', requireAuth, rateLimitSensitiveAction('totp-setup', 10, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die OTP-Einrichtung mit deinem aktuellen NexTerm-Passwort.' });
   const secret = base32Encode(crypto.randomBytes(20));
   req.user.totpPendingSecret = secret;
   req.user.totpPendingAt = Date.now();
+  req.user.totpPendingAttempts = 0;
+  req.user.totpPendingRecoveryPrepared = false;
   delete req.user.totpPendingRecoveryHashes;
   await writeData(req.data);
   const issuer = 'NexTerm Desk';
   const label = encodeURIComponent(`${issuer}:${req.user.username}`);
   res.json({ secret, otpauth: `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30` });
-});
+}));
 
 app.post('/api/auth/totp/prepare-enable', requireAuth, async (req, res) => {
-  if (!req.user.totpPendingSecret || Date.now() - (req.user.totpPendingAt || 0) > 10 * 60 * 1000) return res.status(400).json({ error: 'Starte die OTP-Einrichtung bitte erneut.' });
-  if (!verifyTotp(req.user.totpPendingSecret, req.body?.code)) return res.status(400).json({ error: 'Der Authenticator-Code stimmt nicht.' });
-  const generated = makeRecoveryCodes();
-  req.user.totpPendingRecoveryHashes = generated.map(item => item.hash);
-  await writeData(req.data);
-  res.json({ codes: generated.map(item => item.code) });
+  if (!allowAuthRequest(req, res, 'totp-prepare-enable', 10, 15 * 60 * 1000, req.user.id)) return;
+  const operationKey = `totp-prepare:${req.user.id}`;
+  if (activeSecurityOperations.has(operationKey)) return res.status(429).json({ error: 'Die OTP-Einrichtung wird bereits verarbeitet. Bitte warte kurz.' });
+  activeSecurityOperations.add(operationKey);
+  try {
+    if (!req.user.totpPendingSecret || Date.now() - (req.user.totpPendingAt || 0) > 10 * 60 * 1000) return res.status(400).json({ error: 'Starte die OTP-Einrichtung bitte erneut.' });
+    if (req.user.totpPendingRecoveryPrepared) return res.status(409).json({ error: 'Die Wiederherstellungscodes wurden bereits angezeigt. Starte die OTP-Einrichtung erneut, falls du sie nicht gespeichert hast.' });
+    if ((req.user.totpPendingAttempts || 0) >= 5) {
+      delete req.user.totpPendingSecret;
+      delete req.user.totpPendingAt;
+      delete req.user.totpPendingAttempts;
+      delete req.user.totpPendingRecoveryPrepared;
+      delete req.user.totpPendingRecoveryHashes;
+      await writeData(req.data);
+      return res.status(429).json({ error: 'Zu viele falsche Codes. Starte die OTP-Einrichtung erneut.' });
+    }
+    if (!verifyTotp(req.user.totpPendingSecret, req.body?.code)) {
+      req.user.totpPendingAttempts = (req.user.totpPendingAttempts || 0) + 1;
+      const attemptsExhausted = req.user.totpPendingAttempts >= 5;
+      if (attemptsExhausted) {
+        delete req.user.totpPendingSecret;
+        delete req.user.totpPendingAt;
+        delete req.user.totpPendingAttempts;
+        delete req.user.totpPendingRecoveryPrepared;
+        delete req.user.totpPendingRecoveryHashes;
+      }
+      await writeData(req.data);
+      return res.status(attemptsExhausted ? 429 : 400).json({ error: attemptsExhausted ? 'Zu viele falsche Codes. Starte die OTP-Einrichtung erneut.' : 'Der Authenticator-Code stimmt nicht.' });
+    }
+    const generated = makeRecoveryCodes();
+    req.user.totpPendingRecoveryHashes = generated.map(item => item.hash);
+    req.user.totpPendingRecoveryPrepared = true;
+    await writeData(req.data);
+    res.json({ codes: generated.map(item => item.code) });
+  } finally {
+    activeSecurityOperations.delete(operationKey);
+  }
 });
 
 app.post('/api/auth/totp/enable', requireAuth, async (req, res) => {
-  if (req.body?.codesSaved !== true || !req.user.totpPendingSecret || Date.now() - (req.user.totpPendingAt || 0) > 10 * 60 * 1000 || !Array.isArray(req.user.totpPendingRecoveryHashes)) return res.status(400).json({ error: 'Die Einrichtung ist abgelaufen. Starte sie erneut und speichere die neuen Codes.' });
+  if (req.body?.codesSaved !== true || !req.user.totpPendingSecret || Date.now() - (req.user.totpPendingAt || 0) > 10 * 60 * 1000 || req.user.totpPendingRecoveryPrepared !== true || !Array.isArray(req.user.totpPendingRecoveryHashes)) return res.status(400).json({ error: 'Die Einrichtung ist abgelaufen. Starte sie erneut und speichere die neuen Codes.' });
   req.user.totpSecret = req.user.totpPendingSecret;
   req.user.totpEnabled = true;
   req.user.recoveryCodes = req.user.totpPendingRecoveryHashes;
   delete req.user.totpPendingSecret;
   delete req.user.totpPendingAt;
+  delete req.user.totpPendingAttempts;
+  delete req.user.totpPendingRecoveryPrepared;
   delete req.user.totpPendingRecoveryHashes;
   await writeData(req.data);
   res.json({ ok: true });
 });
 
-app.post('/api/auth/passkeys/register/options', requireAuth, async (req, res) => {
+app.post('/api/auth/passkeys/register/options', requireAuth, rateLimitSensitiveAction('passkey-register-options', 10, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   try {
     if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die Passkey-Einrichtung mit deinem aktuellen NexTerm-Passwort.' });
     req.user.passkeys = (req.user.passkeys || []).filter(entry => entry.enabled);
@@ -907,15 +988,21 @@ app.post('/api/auth/passkeys/register/options', requireAuth, async (req, res) =>
     webAuthnChallenges.set(`register:${req.loginToken}`, { challenge: options.challenge, expiresAt: Date.now() + 5 * 60 * 1000 });
     res.json(options);
   } catch (error) { res.status(400).json({ error: error.message }); }
-});
+}));
 
 app.post('/api/auth/passkeys/register/verify', requireAuth, async (req, res) => {
-  const pending = webAuthnChallenges.get(`register:${req.loginToken}`);
-  if (!pending || pending.expiresAt <= Date.now()) return res.status(400).json({ error: 'Die Passkey-Einrichtung ist abgelaufen. Bitte erneut starten.' });
+  if (!allowAuthRequest(req, res, 'passkey-register-verify', 10, 15 * 60 * 1000, req.user.id)) return;
+  const challengeKey = `register:${req.loginToken}`;
+  const pending = webAuthnChallenges.get(challengeKey);
+  if (!pending || pending.expiresAt <= Date.now()) {
+    webAuthnChallenges.delete(challengeKey);
+    return res.status(400).json({ error: 'Die Passkey-Einrichtung ist abgelaufen. Bitte erneut starten.' });
+  }
+  // A WebAuthn challenge is single-use, even when verification fails or throws.
+  webAuthnChallenges.delete(challengeKey);
   try {
     const { rpID, origin } = getWebAuthnContext(req);
     const verification = await verifyRegistrationResponse({ response: req.body, expectedChallenge: pending.challenge, expectedOrigin: origin, expectedRPID: rpID, requireUserVerification: true });
-    webAuthnChallenges.delete(`register:${req.loginToken}`);
     if (!verification.verified || !verification.registrationInfo) return res.status(400).json({ error: 'Passkey konnte nicht bestätigt werden.' });
     const generated = makeRecoveryCodes();
     const credential = verification.registrationInfo.credential;
@@ -944,6 +1031,14 @@ app.post('/api/auth/passkeys/enable', requireAuth, async (req, res) => {
 app.post('/api/auth/passkeys/login/options', async (req, res) => {
   const current = authChallengeFromRequest(req, res);
   if (!current) return res.status(401).json({ error: 'Die Anmeldung ist abgelaufen.' });
+  if (!allowAuthRequest(req, res, 'passkey-login-options', 10, 15 * 60 * 1000, current.challenge.userId)) return;
+  if (current.challenge.passkeyOptionsAttempts >= 5) {
+    loginChallenges.delete(current.token);
+    webAuthnChallenges.delete(`login:${current.token}`);
+    clearCookie(res, 'nexterm_challenge');
+    return res.status(429).json({ error: 'Zu viele Passkey-Anfragen. Melde dich erneut an.' });
+  }
+  current.challenge.passkeyOptionsAttempts++;
   try {
     const data = await readData();
     const user = data.users.find(entry => entry.id === current.challenge.userId);
@@ -959,27 +1054,46 @@ app.post('/api/auth/passkeys/login/options', async (req, res) => {
 app.post('/api/auth/passkeys/login/verify', async (req, res) => {
   const current = authChallengeFromRequest(req, res);
   if (!current) return res.status(401).json({ error: 'Die Anmeldung ist abgelaufen.' });
+  if (!allowAuthRequest(req, res, 'passkey-login-verify', 10, 15 * 60 * 1000, current.challenge.userId)) return;
+  if (current.challenge.passkeyAttempts >= 5) {
+    loginChallenges.delete(current.token);
+    webAuthnChallenges.delete(`login:${current.token}`);
+    clearCookie(res, 'nexterm_challenge');
+    return res.status(429).json({ error: 'Zu viele Passkey-Versuche. Melde dich erneut an.' });
+  }
   const pending = webAuthnChallenges.get(`login:${current.token}`);
-  if (!pending || pending.expiresAt <= Date.now()) return res.status(400).json({ error: 'Die Passkey-Anfrage ist abgelaufen.' });
+  if (!pending || pending.expiresAt <= Date.now()) {
+    webAuthnChallenges.delete(`login:${current.token}`);
+    return res.status(400).json({ error: 'Die Passkey-Anfrage ist abgelaufen.' });
+  }
+  current.challenge.passkeyAttempts++;
+  // Consume before asynchronous verification so concurrent requests cannot replay it.
+  webAuthnChallenges.delete(`login:${current.token}`);
+  const fail = (status, message) => {
+    if (current.challenge.passkeyAttempts >= 5) {
+      loginChallenges.delete(current.token);
+      clearCookie(res, 'nexterm_challenge');
+    }
+    return res.status(status).json({ error: message });
+  };
   try {
     const data = await readData();
     const user = data.users.find(entry => entry.id === current.challenge.userId);
     const credentialId = String(req.body?.id || '');
     const passkey = (user?.passkeys || []).find(entry => entry.enabled && entry.credential.id === credentialId);
-    if (!user || !passkey) return res.status(401).json({ error: 'Passkey wurde nicht erkannt.' });
+    if (!user || !passkey) return fail(401, 'Passkey wurde nicht erkannt.');
     const { rpID, origin } = getWebAuthnContext(req);
     const verification = await verifyAuthenticationResponse({ response: req.body, expectedChallenge: pending.challenge, expectedOrigin: origin, expectedRPID: rpID, credential: { id: passkey.credential.id, publicKey: Buffer.from(passkey.credential.publicKey, 'base64'), counter: passkey.credential.counter, transports: passkey.credential.transports }, requireUserVerification: true });
-    webAuthnChallenges.delete(`login:${current.token}`);
-    if (!verification.verified) return res.status(401).json({ error: 'Passkey-Anmeldung fehlgeschlagen.' });
+    if (!verification.verified) return fail(401, 'Passkey-Anmeldung fehlgeschlagen.');
     passkey.credential.counter = verification.authenticationInfo.newCounter;
     await writeData(data);
     loginChallenges.delete(current.token);
     clearCookie(res, 'nexterm_challenge');
     res.json({ user: issueLoginSession(req, res, user) });
-  } catch { res.status(401).json({ error: 'Passkey-Anmeldung fehlgeschlagen.' }); }
+  } catch { fail(401, 'Passkey-Anmeldung fehlgeschlagen.'); }
 });
 
-app.post('/api/auth/security/disable', requireAuth, async (req, res) => {
+app.post('/api/auth/security/disable', requireAuth, rateLimitSensitiveAction('security-disable', 5, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   const password = String(req.body?.password || '');
   const code = String(req.body?.code || '');
   const candidate = await derivePassword(password, Buffer.from(req.user.passwordSalt, 'hex'));
@@ -993,7 +1107,7 @@ app.post('/api/auth/security/disable', requireAuth, async (req, res) => {
   req.user.recoveryCodes = [];
   await writeData(req.data);
   res.json({ ok: true });
-});
+}));
 
 app.use('/api/admin', requireSameOrigin, requireAuth);
 app.get('/api/admin/users', (req, res) => {
@@ -1001,9 +1115,12 @@ app.get('/api/admin/users', (req, res) => {
   res.json((req.data.users || []).map(user => ({ id: user.id, username: user.username, name: user.name, email: user.email || '', role: user.role || 'user', mustChangePassword: Boolean(user.mustChangePassword) })));
 });
 
-app.post('/api/admin/users/:id/reset-password', async (req, res) => {
+app.post('/api/admin/users/:id/reset-password', (req, res, next) => {
   if (localDesktopMode || req.user.role !== 'admin') return res.status(403).json({ error: 'Nur das Admin-Konto kann Passwörter zurücksetzen.' });
   if (req.params.id === req.user.id) return res.status(400).json({ error: 'Das eigene Passwort änderst du in den Kontoeinstellungen.' });
+  if (!allowAuthRequest(req, res, 'admin-reset-password', 5, 15 * 60 * 1000, req.user.id)) return;
+  next();
+}, withSensitiveKdf(async (req, res) => {
   if (!await verifyAccountPassword(req.user, req.body?.adminPassword)) return res.status(403).json({ error: 'Bestätige das Zurücksetzen mit deinem aktuellen Admin-Passwort.' });
   const password = String(req.body?.password || '');
   if (password.length < 12 || password.length > 256) return res.status(400).json({ error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
@@ -1018,7 +1135,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
   for (const [token, session] of loginSessions) if (session.userId === target.id) loginSessions.delete(token);
   closeUserSshSessions(target.id);
   res.json({ ok: true });
-});
+}));
 
 app.use('/api/workspaces', requireSameOrigin, requireAuth);
 app.get('/api/workspaces', (req, res) => {
@@ -1362,7 +1479,11 @@ for (const candidate of distCandidates) {
 }
 if (distPath) {
   app.use(express.static(distPath));
-  app.get('/{*splat}', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
+  app.get('/{*splat}', (req, res) => {
+    if (req.path === '/api' || req.path.startsWith('/api/')) return res.status(404).json({ error: 'API-Endpunkt wurde nicht gefunden.' });
+    if (!allowAuthRequest(req, res, 'spa-fallback', 120, 60 * 1000)) return;
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
 } else {
   console.error('NexTerm: dist/index.html wurde nicht gefunden.');
   app.get('/{*splat}', (_req, res) => res.status(503).type('text/plain').send('Die NexTerm-Oberfläche fehlt in dieser Installation. Bitte aktualisiere die App.'));
