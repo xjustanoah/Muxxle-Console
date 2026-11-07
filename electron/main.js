@@ -18,7 +18,7 @@ const TITLE_BAR_THEMES = Object.freeze({
 });
 let launcherWindow = null;
 let appWindow = null;
-let windowDragState = null;
+let launcherDragState = null;
 let localServerStarted = false;
 let shuttingDown = false;
 
@@ -118,14 +118,14 @@ function assertAppWindowSender(event) {
   }
 }
 
-function getDraggableWindow(event) {
+function getDraggableLauncher(event) {
   const senderWindow = BrowserWindow.fromWebContents(event.sender);
-  if (![appWindow, launcherWindow].includes(senderWindow) || event.senderFrame !== event.sender.mainFrame) return null;
+  if (senderWindow !== launcherWindow || event.senderFrame !== event.sender.mainFrame) return null;
   return senderWindow;
 }
 
 ipcMain.on('window:drag', (event, action, rawPoint) => {
-  const window = getDraggableWindow(event);
+  const window = getDraggableLauncher(event);
   if (!window || window.isDestroyed()) return;
   const point = Number.isFinite(rawPoint?.x) && Number.isFinite(rawPoint?.y)
     ? { x: rawPoint.x, y: rawPoint.y }
@@ -137,7 +137,7 @@ ipcMain.on('window:drag', (event, action, rawPoint) => {
     const cursor = point
       ? { x: point.x / scaleFactor, y: point.y / scaleFactor }
       : screen.getCursorScreenPoint();
-    windowDragState = {
+    launcherDragState = {
       window,
       origin: { x: bounds.x, y: bounds.y },
       size: { width: bounds.width, height: bounds.height },
@@ -146,18 +146,18 @@ ipcMain.on('window:drag', (event, action, rawPoint) => {
     };
     return;
   }
-  if (action === 'move' && windowDragState?.window === window) {
+  if (action === 'move' && launcherDragState?.window === window) {
     const cursor = point
-      ? { x: point.x / windowDragState.scaleFactor, y: point.y / windowDragState.scaleFactor }
+      ? { x: point.x / launcherDragState.scaleFactor, y: point.y / launcherDragState.scaleFactor }
       : screen.getCursorScreenPoint();
     window.setBounds({
-      x: Math.round(windowDragState.origin.x + cursor.x - windowDragState.cursor.x),
-      y: Math.round(windowDragState.origin.y + cursor.y - windowDragState.cursor.y),
-      ...windowDragState.size
+      x: Math.round(launcherDragState.origin.x + cursor.x - launcherDragState.cursor.x),
+      y: Math.round(launcherDragState.origin.y + cursor.y - launcherDragState.cursor.y),
+      ...launcherDragState.size
     }, false);
     return;
   }
-  if (action === 'end' && windowDragState?.window === window) windowDragState = null;
+  if (action === 'end' && launcherDragState?.window === window) launcherDragState = null;
 });
 
 async function createAppWindow(baseUrl) {
@@ -191,7 +191,7 @@ async function createAppWindow(baseUrl) {
     appWindow = null;
     throw error;
   }
-  appWindow.on('closed', () => { if (windowDragState?.window === appWindow) windowDragState = null; appWindow = null; });
+  appWindow.on('closed', () => { appWindow = null; });
 }
 
 async function createLauncher() {
@@ -220,7 +220,7 @@ async function createLauncher() {
   });
   await launcherWindow.loadFile(LAUNCHER_FILE);
   launcherWindow.on('closed', () => {
-    if (windowDragState?.window === launcherWindow) windowDragState = null;
+    if (launcherDragState?.window === launcherWindow) launcherDragState = null;
     launcherWindow = null;
   });
 }

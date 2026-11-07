@@ -5,8 +5,5 @@ window.addEventListener('DOMContentLoaded', () => {
 }, { once: true });
 
 contextBridge.exposeInMainWorld('nextermDesktop', Object.freeze({
-  setWindowTheme: theme => ipcRenderer.invoke('window:set-theme', theme),
-  dragWindow: (action, point) => {
-    if (['start', 'move', 'end'].includes(action)) ipcRenderer.send('window:drag', action, point);
-  }
+  setWindowTheme: theme => ipcRenderer.invoke('window:set-theme', theme)
 }));

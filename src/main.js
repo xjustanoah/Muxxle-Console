@@ -275,7 +275,6 @@ async function mountWorkspace(user) {
   user.theme = applyTheme(user.theme);
   root.classList.remove('auth-screen', 'auth-checking');
   root.innerHTML = appMarkup;
-  enableDesktopWindowDragging($('.topbar'));
   $('#themeSelect').value = user.theme;
   $('#accountName').textContent = user.name;
   $('#accountUsername').textContent = `@${user.username}`;
@@ -292,33 +291,6 @@ async function mountWorkspace(user) {
   bindEvents();
   await loadWorkspace();
   if (!isLocalDesktopVault && (user.mustChangePassword || !user.email)) openAccountModal(Boolean(user.mustChangePassword), !user.email);
-}
-
-function enableDesktopWindowDragging(handle) {
-  const dragWindow = window.nextermDesktop?.dragWindow;
-  if (!handle || typeof dragWindow !== 'function') return;
-
-  let pointerId = null;
-  const finishDrag = event => {
-    if (event.pointerId !== pointerId) return;
-    pointerId = null;
-    dragWindow('end');
-    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-  };
-
-  handle.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || event.target.closest('.topbar-actions, button, a, input, select, textarea, [role="button"]')) return;
-    pointerId = event.pointerId;
-    handle.setPointerCapture(pointerId);
-    dragWindow('start', { x: event.screenX, y: event.screenY });
-    event.preventDefault();
-  });
-  handle.addEventListener('pointermove', event => {
-    if (event.pointerId === pointerId) dragWindow('move', { x: event.screenX, y: event.screenY });
-  });
-  handle.addEventListener('pointerup', finishDrag);
-  handle.addEventListener('pointercancel', finishDrag);
-  handle.addEventListener('lostpointercapture', finishDrag);
 }
 
 async function logoutUser() {
