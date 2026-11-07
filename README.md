@@ -2,7 +2,7 @@
 
 Eine von [xjustanoah](https://github.com/xjustanoah) entwickelte SSH-Arbeitsoberfläche für Windows und Web: Serververbindungen, interaktives Terminal, SFTP-Dateiübertragung und Linux-Servermonitoring.
 
-**Windows-Installer:** [NexTerm Desk 0.2.9 herunterladen](https://github.com/xjustanoah/NexTerm/releases/tag/v0.2.9)
+**Windows-Installer:** [NexTerm Desk 0.3.0 herunterladen](https://github.com/xjustanoah/NexTerm/releases/tag/v0.3.0)
 
 ## Starten
 
