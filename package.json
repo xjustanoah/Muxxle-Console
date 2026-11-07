@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "concurrently -k \"node start-server.cjs\" \"vite --host 127.0.0.1\"",
     "build": "vite build",
+    "test": "node --test",
     "start": "node start-server.cjs",
     "desktop": "electron .",
     "dist:win": "npm run build && electron-builder --win nsis --x64"

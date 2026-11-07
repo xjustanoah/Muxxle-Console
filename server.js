@@ -26,6 +26,9 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 const sessions = new Map();
+const pendingSshSessions = new Map();
+const MAX_SSH_SESSIONS_TOTAL = 32;
+const MAX_SSH_SESSIONS_PER_USER = 5;
 const loginSessions = new Map();
 const loginAttempts = new Map();
 const authRateLimits = new Map();
@@ -313,6 +316,23 @@ function closeUserSshSessionsExcept(userId, loginToken) {
 function closeUserSshSessionsIfLoggedOut(userId) {
   const stillLoggedIn = [...loginSessions.values()].some(session => session.userId === userId && session.expiresAt > Date.now());
   if (!stillLoggedIn) closeUserSshSessions(userId);
+}
+
+function reserveSshSession(userId) {
+  let total = pendingSshSessions.size;
+  let userTotal = 0;
+  for (const session of sessions.values()) {
+    if (session.closed) continue;
+    total += 1;
+    if (session.userId === userId) userTotal += 1;
+  }
+  for (const pendingUserId of pendingSshSessions.values()) {
+    if (pendingUserId === userId) userTotal += 1;
+  }
+  if (total >= MAX_SSH_SESSIONS_TOTAL || userTotal >= MAX_SSH_SESSIONS_PER_USER) return null;
+  const reservationId = crypto.randomUUID();
+  pendingSshSessions.set(reservationId, userId);
+  return reservationId;
 }
 
 const authExpiryTimer = setInterval(() => {
@@ -1135,10 +1155,14 @@ app.post('/api/sessions', async (req, res) => {
     return res.status(400).json({ error: 'Server oder Anmeldemethode fehlt.' });
   }
   let connected;
+  let createdSession;
+  let reservationId;
   try {
     const workspace = activeWorkspace(req.user);
     const profile = workspace.hosts.find(host => host.id === hostId);
     if (!profile) return res.status(404).json({ error: 'Serverprofil nicht gefunden.' });
+    reservationId = reserveSshSession(req.user.id);
+    if (!reservationId) return res.status(429).json({ error: 'Zu viele gleichzeitige SSH-Sitzungen. Schließe eine Sitzung und versuche es erneut.' });
     try { connected = await connectSsh(profile, auth); }
     catch (error) {
       if (error.fingerprint) return res.status(409).json({ error: 'HOST_KEY', fingerprint: error.fingerprint, changed: error.changed });
@@ -1151,7 +1175,10 @@ app.post('/api/sessions', async (req, res) => {
     }
     const id = crypto.randomUUID();
     const session = { id, userId: req.user.id, loginToken: req.loginToken, workspaceId: workspace.id, host: publicHost(profile), ...connected, socket: null, buffer: [], closed: false, previousMetrics: null };
+    createdSession = session;
     sessions.set(id, session);
+    pendingSshSessions.delete(reservationId);
+    reservationId = null;
     session.shell.on('data', data => {
       if (session.socket?.readyState === WebSocket.OPEN) session.socket.send(data);
       else {
@@ -1169,8 +1196,11 @@ app.post('/api/sessions', async (req, res) => {
     });
     res.status(201).json({ id, host: session.host, home: session.home });
   } catch (error) {
-    connected?.client.end();
+    if (createdSession) closeSshSession(createdSession);
+    else connected?.client.end();
     res.status(500).json({ error: error.message || 'Verbindung konnte nicht eingerichtet werden.' });
+  } finally {
+    if (reservationId) pendingSshSessions.delete(reservationId);
   }
 });
 
