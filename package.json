@@ -1,5 +1,5 @@
 {
-  "name": "nexterm-desk",
+  "name": "muxxle-console",
   "version": "0.3.0",
   "description": "SSH, SFTP und Linux-Servermonitoring für Windows und Web",
   "author": "xjustanoah",
@@ -41,13 +41,14 @@
   },
   "build": {
     "appId": "com.nexterm.desk",
-    "productName": "NexTerm Desk",
+    "productName": "Muxxle Console",
     "asar": true,
     "directories": {
       "output": "release"
     },
     "files": [
       "server.js",
+      "project-env.cjs",
       "electron/**/*",
       "package.json"
     ],
@@ -58,11 +59,11 @@
       }
     ],
     "win": {
-      "icon": "electron/nexterm-app-icon.ico",
+      "icon": "electron/muxxle-console-app-icon.ico",
       "target": [
         "nsis"
       ],
-      "artifactName": "NexTerm-Desk-${version}-Setup.${ext}"
+      "artifactName": "Muxxle-Console-${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

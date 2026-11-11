@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, screen, session } from 'electron';
 import crypto from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,7 +9,11 @@ import { startServer, stopServer } from '../server.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LAUNCHER_FILE = path.join(ROOT, 'connect.html');
-const APP_DATA_DIR = path.join(app.getPath('userData'), 'vault');
+// Keep the Electron profile and its encrypted vault accessible after a package rename.
+const PROFILE_DIR = path.join(app.getPath('appData'), 'nexterm-desk');
+mkdirSync(PROFILE_DIR, { recursive: true, mode: 0o700 });
+app.setPath('userData', PROFILE_DIR);
+const APP_DATA_DIR = path.join(PROFILE_DIR, 'vault');
 const LEGACY_DATA_DIR = path.join(os.homedir(), '.nexterm');
 const VAULT_KEY_FILE = 'vault-key.dpapi';
 const TITLE_BAR_THEMES = Object.freeze({
@@ -43,31 +48,27 @@ function validateServerUrl(value) {
   if (target.protocol !== 'https:' && !(target.protocol === 'http:' && isLoopback)) {
     throw new Error('Für Webserver wird HTTPS benötigt. HTTP ist nur für localhost erlaubt.');
   }
-  if (target.pathname !== '/') throw new Error('Die NexTerm-Weboberfläche muss unter der Stammadresse des Webservers erreichbar sein.');
+  if (target.pathname !== '/') throw new Error('Muxxle Console muss unter der Stammadresse des Webservers erreichbar sein.');
   return target.origin;
 }
 
 async function loadLauncherSettings() {
   try {
-    const settings = JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'launcher.json'), 'utf8'));
+    const settings = JSON.parse(await fs.readFile(path.join(PROFILE_DIR, 'launcher.json'), 'utf8'));
     return { serverUrl: typeof settings.serverUrl === 'string' ? settings.serverUrl : '' };
   } catch { return { serverUrl: '' }; }
 }
 
 async function saveLauncherSettings(serverUrl) {
-  const directory = app.getPath('userData');
-  await fs.mkdir(directory, { recursive: true });
-  const tempPath = path.join(directory, `launcher.${process.pid}.${crypto.randomUUID()}.tmp`);
+  const tempPath = path.join(PROFILE_DIR, `launcher.${process.pid}.${crypto.randomUUID()}.tmp`);
   await fs.writeFile(tempPath, JSON.stringify({ serverUrl }, null, 2), { mode: 0o600 });
-  await fs.rename(tempPath, path.join(directory, 'launcher.json'));
+  await fs.rename(tempPath, path.join(PROFILE_DIR, 'launcher.json'));
 }
 
 async function getVaultKey() {
   if (process.platform !== 'win32') throw new Error('Der verschlüsselte lokale Tresor ist aktuell nur in der Windows-App verfügbar.');
   if (!(await safeStorage.isAsyncEncryptionAvailable())) throw new Error('Windows-Datenschutzverschlüsselung ist nicht verfügbar. Der Tresor wurde nicht geöffnet.');
-  const directory = app.getPath('userData');
-  const keyPath = path.join(directory, VAULT_KEY_FILE);
-  await fs.mkdir(directory, { recursive: true });
+  const keyPath = path.join(PROFILE_DIR, VAULT_KEY_FILE);
   try {
     const encryptedKey = await fs.readFile(keyPath);
     const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(encryptedKey);
@@ -171,8 +172,8 @@ async function createAppWindow(baseUrl) {
     minHeight: 640,
     center: true,
     backgroundColor: '#080c25',
-    icon: path.join(ROOT, 'nexterm-app-icon.ico'),
-    title: 'NexTerm Desk',
+    icon: path.join(ROOT, 'muxxle-console-app-icon.ico'),
+    title: 'Muxxle Console',
     autoHideMenuBar: true,
     ...getWindowChromeOptions(),
     webPreferences: {
@@ -203,8 +204,8 @@ async function createLauncher() {
     useContentSize: true,
     resizable: true,
     backgroundColor: '#080c25',
-    icon: path.join(ROOT, 'nexterm-app-icon.ico'),
-    title: 'NexTerm Desk · Verbindung wählen',
+    icon: path.join(ROOT, 'muxxle-console-app-icon.ico'),
+    title: 'Muxxle Console · Verbindung wählen',
     autoHideMenuBar: true,
     ...getWindowChromeOptions(),
     webPreferences: {
@@ -299,7 +300,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   try { await createLauncher(); }
-  catch (error) { await dialog.showMessageBox({ type: 'error', title: 'NexTerm Desk', message: 'Die Startauswahl konnte nicht geöffnet werden.', detail: error.message }); app.quit(); }
+  catch (error) { await dialog.showMessageBox({ type: 'error', title: 'Muxxle Console', message: 'Die Startauswahl konnte nicht geöffnet werden.', detail: error.message }); app.quit(); }
 });
 
 app.on('before-quit', event => {
