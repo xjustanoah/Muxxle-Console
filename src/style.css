@@ -381,7 +381,7 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
 .toast.leaving { opacity: 0; transform: translateY(-5px); transition: .2s ease; }
 .mobile-menu { display: none; margin-left: auto; }
 .auth-checking { min-height: 100vh; display: grid; place-items: center; }
-.auth-checking::after { content: 'Muxxle Console wird geladen…'; color: #858c9d; font: 10px 'DM Mono', monospace; }
+.auth-checking::after { content: 'Termxxle wird geladen…'; color: #858c9d; font: 10px 'DM Mono', monospace; }
 .auth-checking .app-shell { display: none; }
 .auth-screen { min-height: 100vh; }
 .auth-layout { min-height: 100vh; display: grid; grid-template-columns: minmax(360px, .88fr) minmax(440px, 1.12fr); background: #10131a; }
@@ -1094,7 +1094,7 @@ html[data-theme] .text-button:hover { color: var(--accent-hover); }
   html[data-theme] .topbar-actions { gap: 8px; }
 }
 
-/* Muxxle Console brand palette: violet, electric blue, and cyan on deep navy. */
+/* Termxxle brand palette: violet, electric blue, and cyan on deep navy. */
 :root {
   --brand-violet: #a64aff;
   --brand-blue: #6176ff;

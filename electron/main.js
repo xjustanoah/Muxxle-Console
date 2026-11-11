@@ -48,7 +48,7 @@ function validateServerUrl(value) {
   if (target.protocol !== 'https:' && !(target.protocol === 'http:' && isLoopback)) {
     throw new Error('Für Webserver wird HTTPS benötigt. HTTP ist nur für localhost erlaubt.');
   }
-  if (target.pathname !== '/') throw new Error('Muxxle Console muss unter der Stammadresse des Webservers erreichbar sein.');
+  if (target.pathname !== '/') throw new Error('Termxxle muss unter der Stammadresse des Webservers erreichbar sein.');
   return target.origin;
 }
 
@@ -172,8 +172,8 @@ async function createAppWindow(baseUrl) {
     minHeight: 640,
     center: true,
     backgroundColor: '#080c25',
-    icon: path.join(ROOT, 'muxxle-console-app-icon.ico'),
-    title: 'Muxxle Console',
+    icon: path.join(ROOT, 'termxxle-app-icon.ico'),
+    title: 'Termxxle',
     autoHideMenuBar: true,
     ...getWindowChromeOptions(),
     webPreferences: {
@@ -204,8 +204,8 @@ async function createLauncher() {
     useContentSize: true,
     resizable: true,
     backgroundColor: '#080c25',
-    icon: path.join(ROOT, 'muxxle-console-app-icon.ico'),
-    title: 'Muxxle Console · Verbindung wählen',
+    icon: path.join(ROOT, 'termxxle-app-icon.ico'),
+    title: 'Termxxle · Verbindung wählen',
     autoHideMenuBar: true,
     ...getWindowChromeOptions(),
     webPreferences: {
@@ -300,7 +300,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   try { await createLauncher(); }
-  catch (error) { await dialog.showMessageBox({ type: 'error', title: 'Muxxle Console', message: 'Die Startauswahl konnte nicht geöffnet werden.', detail: error.message }); app.quit(); }
+  catch (error) { await dialog.showMessageBox({ type: 'error', title: 'Termxxle', message: 'Die Startauswahl konnte nicht geöffnet werden.', detail: error.message }); app.quit(); }
 });
 
 app.on('before-quit', event => {

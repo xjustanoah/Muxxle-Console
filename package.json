@@ -1,6 +1,6 @@
 {
-  "name": "muxxle-console",
-  "version": "0.3.0",
+  "name": "termxxle",
+  "version": "0.3.1",
   "description": "SSH, SFTP und Linux-Servermonitoring für Windows und Web",
   "author": "xjustanoah",
   "license": "SEE LICENSE IN LICENSE",
@@ -41,7 +41,7 @@
   },
   "build": {
     "appId": "com.nexterm.desk",
-    "productName": "Muxxle Console",
+    "productName": "Termxxle",
     "asar": true,
     "directories": {
       "output": "release"
@@ -59,11 +59,11 @@
       }
     ],
     "win": {
-      "icon": "electron/muxxle-console-app-icon.ico",
+      "icon": "electron/termxxle-app-icon.ico",
       "target": [
         "nsis"
       ],
-      "artifactName": "Muxxle-Console-${version}-Setup.${ext}"
+      "artifactName": "Termxxle-${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

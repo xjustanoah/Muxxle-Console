@@ -3,7 +3,7 @@ const remoteButton = document.querySelector('#remoteButton');
 const remoteForm = document.querySelector('#remoteForm');
 const serverUrl = document.querySelector('#serverUrl');
 const message = document.querySelector('#launchMessage');
-const launcher = window.muxxleConsoleLauncher;
+const launcher = window.termxxleLauncher;
 
 const dragHandle = document.querySelector('.brand');
 if (typeof launcher.dragWindow === 'function' && dragHandle) {

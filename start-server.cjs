@@ -14,7 +14,7 @@ function prepareDataKey() {
   const configuredDataKey = projectEnv('DATA_KEY');
   if (configuredDataKey) {
     if (!/^[a-fA-F0-9]{64}$/.test(configuredDataKey)) {
-      throw new Error('MUXXLE_CONSOLE_DATA_KEY muss aus genau 64 Hex-Zeichen bestehen.');
+      throw new Error('TERMXXLE_DATA_KEY muss aus genau 64 Hex-Zeichen bestehen.');
     }
     return;
   }
@@ -39,13 +39,13 @@ function prepareDataKey() {
 
   if (!/^[a-fA-F0-9]{64}$/.test(key)) throw new Error('.data-key muss aus genau 64 Hex-Zeichen bestehen.');
   if (process.platform !== 'win32') fs.chmodSync(keyPath, 0o600);
-  process.env.MUXXLE_CONSOLE_DATA_KEY = key;
-  process.env.MUXXLE_CONSOLE_DATA_DIR = dataDir;
+  process.env.TERMXXLE_DATA_KEY = key;
+  process.env.TERMXXLE_DATA_DIR = dataDir;
 }
 
 try { prepareDataKey(); }
 catch (error) {
-  console.error('Muxxle Console Startfehler:', error.message);
+  console.error('Termxxle Startfehler:', error.message);
   process.exit(1);
 }
 
@@ -65,7 +65,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 }
 
 child.on('error', error => {
-  console.error('Muxxle Console Prozessfehler:', error.message);
+  console.error('Termxxle Prozessfehler:', error.message);
   process.exitCode = 1;
 });
 child.on('exit', (code, signal) => {

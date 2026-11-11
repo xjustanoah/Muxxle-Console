@@ -88,7 +88,7 @@ function syncOrigin() {
 
 function updateOnStartup() {
   if (!autoUpdate || !hasRepo) return;
-  console.log(`Muxxle Console: prüfe GitHub-Branch ${branch}`);
+  console.log(`Termxxle: prüfe GitHub-Branch ${branch}`);
   syncOrigin();
   runGit(['-c', 'credential.interactive=never', 'pull', '--ff-only', 'origin', branch]);
 }
@@ -150,7 +150,7 @@ async function main() {
   if (extras.length) run(npm, ['install', '--no-save', ...extras]);
   if (remove.length) run(npm, ['uninstall', ...remove]);
   if (fs.existsSync(path.join(root, 'package.json'))) {
-    console.log('Muxxle Console: installiere Produktionsabhängigkeiten');
+    console.log('Termxxle: installiere Produktionsabhängigkeiten');
     run(npm, ['install', '--omit=dev']);
   }
 
@@ -159,8 +159,8 @@ async function main() {
     HOST: '0.0.0.0',
     PORT: process.env.PORT || '8081',
     TRUST_PROXY: process.env.TRUST_PROXY || '1',
-    MUXXLE_CONSOLE_DATA_DIR: dataDir,
-    MUXXLE_CONSOLE_DATA_KEY: dataKey,
+    TERMXXLE_DATA_DIR: dataDir,
+    TERMXXLE_DATA_KEY: dataKey,
   });
 
   let child = null;
@@ -177,13 +177,13 @@ async function main() {
     });
     child = instance;
     instance.on('error', (error) => {
-      console.error('Muxxle Console Prozessfehler:', error.message);
+      console.error('Termxxle Prozessfehler:', error.message);
       if (!stopping && !updating) process.exit(1);
     });
     instance.on('exit', (code, signal) => {
       if (child === instance) child = null;
       if (!stopping && !updating) {
-        console.error('Muxxle Console wurde beendet.', signal || code);
+        console.error('Termxxle wurde beendet.', signal || code);
         process.exit(code ?? 1);
       }
     });
@@ -201,7 +201,7 @@ async function main() {
       const localSha = captureGit(['rev-parse', 'HEAD']);
       if (remoteSha === localSha) return;
 
-      console.log('Muxxle Console: neuer GitHub-Commit erkannt; aktualisiere.');
+      console.log('Termxxle: neuer GitHub-Commit erkannt; aktualisiere.');
       runGit(['-c', 'credential.interactive=never', 'pull', '--ff-only', 'origin', branch]);
       const updatedSha = captureGit(['rev-parse', 'HEAD']);
       if (updatedSha === localSha) return;
@@ -212,7 +212,7 @@ async function main() {
         try {
           runGit(['reset', '--hard', localSha]);
         } catch (rollbackError) {
-          console.error('Muxxle Console: Rollback fehlgeschlagen:', rollbackError.message);
+          console.error('Termxxle: Rollback fehlgeschlagen:', rollbackError.message);
         }
         throw error;
       }
@@ -221,11 +221,11 @@ async function main() {
       await stop(child);
       if (stopping) return;
       updating = false;
-      console.log('Muxxle Console: Update aktiv; starte Dienst neu.');
+      console.log('Termxxle: Update aktiv; starte Dienst neu.');
       launch();
     } catch (error) {
       updating = false;
-      console.error('Muxxle Console Auto-Update:', error.message);
+      console.error('Termxxle Auto-Update:', error.message);
     } finally {
       checking = false;
     }
@@ -243,12 +243,12 @@ async function main() {
   launch();
 
   if (autoUpdate && hasRepo) {
-    console.log(`Muxxle Console: prüft ${branch} alle 60 Sekunden auf Updates.`);
+    console.log(`Termxxle: prüft ${branch} alle 60 Sekunden auf Updates.`);
     timer = setInterval(() => void checkUpdate(), 60000);
   }
 }
 
 main().catch((error) => {
-  console.error('Muxxle Console Startfehler:', error.message);
+  console.error('Termxxle Startfehler:', error.message);
   process.exit(1);
 });
