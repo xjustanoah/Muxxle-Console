@@ -23,7 +23,7 @@ secrets/
 id_rsa*
 id_ed25519*
 
-# Local NexTerm data and databases
+# Local application data and databases
 .nexterm/
 .nexterm-data/
 /data/

@@ -5,14 +5,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const projectEnv = require('./project-env.cjs');
 
-const dataDir = path.resolve(process.env.NEXTERM_DATA_DIR || path.join(os.homedir(), '.nexterm'));
+const dataDir = path.resolve(projectEnv('DATA_DIR') || path.join(os.homedir(), '.nexterm'));
 const keyPath = path.join(dataDir, '.data-key');
 
 function prepareDataKey() {
-  if (process.env.NEXTERM_DATA_KEY) {
-    if (!/^[a-fA-F0-9]{64}$/.test(process.env.NEXTERM_DATA_KEY)) {
-      throw new Error('NEXTERM_DATA_KEY muss aus genau 64 Hex-Zeichen bestehen.');
+  const configuredDataKey = projectEnv('DATA_KEY');
+  if (configuredDataKey) {
+    if (!/^[a-fA-F0-9]{64}$/.test(configuredDataKey)) {
+      throw new Error('TERMXXLE_DATA_KEY muss aus genau 64 Hex-Zeichen bestehen.');
     }
     return;
   }
@@ -37,13 +39,13 @@ function prepareDataKey() {
 
   if (!/^[a-fA-F0-9]{64}$/.test(key)) throw new Error('.data-key muss aus genau 64 Hex-Zeichen bestehen.');
   if (process.platform !== 'win32') fs.chmodSync(keyPath, 0o600);
-  process.env.NEXTERM_DATA_KEY = key;
-  process.env.NEXTERM_DATA_DIR = dataDir;
+  process.env.TERMXXLE_DATA_KEY = key;
+  process.env.TERMXXLE_DATA_DIR = dataDir;
 }
 
 try { prepareDataKey(); }
 catch (error) {
-  console.error('NexTerm Startfehler:', error.message);
+  console.error('Termxxle Startfehler:', error.message);
   process.exit(1);
 }
 
@@ -63,7 +65,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 }
 
 child.on('error', error => {
-  console.error('NexTerm Prozessfehler:', error.message);
+  console.error('Termxxle Prozessfehler:', error.message);
   process.exitCode = 1;
 });
 child.on('exit', (code, signal) => {

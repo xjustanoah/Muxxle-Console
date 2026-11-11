@@ -9,6 +9,7 @@ import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { Client } from 'ssh2';
 import { WebSocketServer, WebSocket } from 'ws';
 import nodemailer from 'nodemailer';
+import projectEnv from './project-env.cjs';
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -19,10 +20,11 @@ import {
 const DEFAULT_PORT = Number(process.env.PORT || 4783);
 const DEFAULT_HOST = process.env.HOST || '127.0.0.1';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-let DATA_DIR = process.env.NEXTERM_DATA_DIR || path.join(os.homedir(), '.nexterm');
+let DATA_DIR = projectEnv('DATA_DIR') || path.join(os.homedir(), '.nexterm');
 let USERS_FILE = path.join(DATA_DIR, 'users.json');
 let HOSTS_FILE = path.join(DATA_DIR, 'hosts.json');
-let DATA_KEY = process.env.NEXTERM_DATA_KEY ? Buffer.from(process.env.NEXTERM_DATA_KEY, 'hex') : null;
+const configuredDataKey = projectEnv('DATA_KEY');
+let DATA_KEY = configuredDataKey ? Buffer.from(configuredDataKey, 'hex') : null;
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
@@ -50,12 +52,12 @@ let activeHost = DEFAULT_HOST;
 let activePort = DEFAULT_PORT;
 let serverStarted = false;
 let localDesktopMode = false;
-const ADMIN_BOOTSTRAP_TOKEN = process.env.NEXTERM_ADMIN_BOOTSTRAP_TOKEN || '';
+const ADMIN_BOOTSTRAP_TOKEN = projectEnv('ADMIN_BOOTSTRAP_TOKEN') || '';
 let bootstrapRegistrationInProgress = false;
 
-if (DATA_KEY && DATA_KEY.length !== 32) throw new Error('NEXTERM_DATA_KEY muss ein 32-Byte-Hexschlüssel sein.');
+if (DATA_KEY && DATA_KEY.length !== 32) throw new Error('TERMXXLE_DATA_KEY muss ein 32-Byte-Hexschlüssel sein.');
 if (ADMIN_BOOTSTRAP_TOKEN && Array.from(ADMIN_BOOTSTRAP_TOKEN).length < 32) {
-  throw new Error('NEXTERM_ADMIN_BOOTSTRAP_TOKEN muss mindestens 32 Zeichen lang sein.');
+  throw new Error('TERMXXLE_ADMIN_BOOTSTRAP_TOKEN muss mindestens 32 Zeichen lang sein.');
 }
 
 function verifyAdminBootstrapToken(candidate) {
@@ -137,7 +139,7 @@ async function readData() {
     const parsed = decodeStoredJson(content);
     const data = parsed && Array.isArray(parsed.users) ? parsed : { users: [] };
     let changed = false;
-    const configuredAdmin = String(process.env.NEXTERM_ADMIN_USERNAME || '').trim().toLowerCase();
+    const configuredAdmin = String(projectEnv('ADMIN_USERNAME') || '').trim().toLowerCase();
     for (let index = 0; index < data.users.length; index++) {
       const user = data.users[index];
       if (!Array.isArray(user.workspaces)) {
@@ -666,11 +668,11 @@ function setLoginChallenge(req, res, user) {
 function getWebAuthnContext(req) {
   const host = req.get('host');
   const protocol = req.protocol;
-  const origin = process.env.NEXTERM_WEBAUTHN_ORIGIN || `${protocol}://${host}`;
+  const origin = projectEnv('WEBAUTHN_ORIGIN') || `${protocol}://${host}`;
   const parsed = new URL(origin);
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname.toLowerCase());
   if (parsed.protocol !== 'https:' && !local) throw new Error('Passkeys benötigen eine HTTPS-Verbindung.');
-  return { rpID: process.env.NEXTERM_WEBAUTHN_RP_ID || parsed.hostname, origin };
+  return { rpID: projectEnv('WEBAUTHN_RP_ID') || parsed.hostname, origin };
 }
 
 async function sendPasswordResetMail(user, link) {
@@ -682,11 +684,11 @@ async function sendPasswordResetMail(user, link) {
     secure: SMTP_SECURE === '1',
     auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS || '' } : undefined
   });
-  await transporter.sendMail({ from: SMTP_FROM, to: user.email, subject: 'NexTerm Desk Passwort zurücksetzen', text: `Hallo ${user.name},\n\nüber diesen Link kannst du dein Passwort zurücksetzen. Der Link ist 30 Minuten gültig:\n${link}\n\nWenn du diese Anfrage nicht gestellt hast, ignoriere diese Nachricht.` });
+  await transporter.sendMail({ from: SMTP_FROM, to: user.email, subject: 'Passwort für Termxxle zurücksetzen', text: `Hallo ${user.name},\n\nüber diesen Link kannst du dein Passwort zurücksetzen. Der Link ist 30 Minuten gültig:\n${link}\n\nWenn du diese Anfrage nicht gestellt hast, ignoriere diese Nachricht.` });
 }
 
 function passwordResetEnabled() {
-  return process.env.NEXTERM_PASSWORD_RESET_ENABLED === '1'
+  return projectEnv('PASSWORD_RESET_ENABLED') === '1'
     && Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && publicBaseUrl());
 }
 
@@ -700,7 +702,7 @@ export function isValidEmail(email) {
 
 function publicBaseUrl() {
   try {
-    const url = new URL(process.env.NEXTERM_PUBLIC_URL || '');
+    const url = new URL(projectEnv('PUBLIC_URL') || '');
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase());
     if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return null;
@@ -748,7 +750,7 @@ app.post('/api/auth/register', rateLimitSensitiveAction('register', 10, 60 * 60 
     try {
       if (isFirstAccount) {
         if (!ADMIN_BOOTSTRAP_TOKEN) {
-          return res.status(503).json({ error: 'Die Erstregistrierung ist noch nicht freigeschaltet. Der Betreiber muss NEXTERM_ADMIN_BOOTSTRAP_TOKEN mit mindestens 32 Zeichen setzen.' });
+          return res.status(503).json({ error: 'Die Erstregistrierung ist noch nicht freigeschaltet. Der Betreiber muss TERMXXLE_ADMIN_BOOTSTRAP_TOKEN mit mindestens 32 Zeichen setzen.' });
         }
         if (!verifyAdminBootstrapToken(req.body?.adminBootstrapToken)) {
           return res.status(403).json({ error: 'Der Administrator-Startcode ist ungültig.' });
@@ -935,7 +937,7 @@ app.get('/api/auth/security', requireAuth, async (req, res) => {
 });
 
 app.post('/api/auth/totp/setup', requireAuth, rateLimitSensitiveAction('totp-setup', 10, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
-  if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die OTP-Einrichtung mit deinem aktuellen NexTerm-Passwort.' });
+  if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die OTP-Einrichtung mit deinem aktuellen Kontopasswort.' });
   const secret = base32Encode(crypto.randomBytes(20));
   req.user.totpPendingSecret = secret;
   req.user.totpPendingAt = Date.now();
@@ -943,7 +945,7 @@ app.post('/api/auth/totp/setup', requireAuth, rateLimitSensitiveAction('totp-set
   req.user.totpPendingRecoveryPrepared = false;
   delete req.user.totpPendingRecoveryHashes;
   await writeData(req.data);
-  const issuer = 'NexTerm Desk';
+  const issuer = 'Termxxle';
   const label = encodeURIComponent(`${issuer}:${req.user.username}`);
   res.json({ secret, otpauth: `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30` });
 }));
@@ -1004,14 +1006,14 @@ app.post('/api/auth/totp/enable', requireAuth, async (req, res) => {
 
 app.post('/api/auth/passkeys/register/options', requireAuth, rateLimitSensitiveAction('passkey-register-options', 10, 15 * 60 * 1000), withSensitiveKdf(async (req, res) => {
   try {
-    if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die Passkey-Einrichtung mit deinem aktuellen NexTerm-Passwort.' });
+    if (!await verifyAccountPassword(req.user, req.body?.currentPassword)) return res.status(403).json({ error: 'Bestätige die Passkey-Einrichtung mit deinem aktuellen Kontopasswort.' });
     req.user.passkeys = (req.user.passkeys || []).filter(entry => entry.enabled);
     delete req.user.pendingPasskeyId;
     delete req.user.pendingRecoveryHashes;
     await writeData(req.data);
     const { rpID } = getWebAuthnContext(req);
     const options = await generateRegistrationOptions({
-      rpName: 'NexTerm Desk', rpID, userName: req.user.username, userID: Buffer.from(req.user.id), userDisplayName: req.user.name,
+      rpName: 'Termxxle', rpID, userName: req.user.username, userID: Buffer.from(req.user.id), userDisplayName: req.user.name,
       attestationType: 'none', authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
       excludeCredentials: (req.user.passkeys || []).map(entry => ({ id: entry.credential.id, transports: entry.credential.transports }))
     });
@@ -1515,8 +1517,8 @@ if (distPath) {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
-  console.error('NexTerm: dist/index.html wurde nicht gefunden.');
-  app.get('/{*splat}', (_req, res) => res.status(503).type('text/plain').send('Die NexTerm-Oberfläche fehlt in dieser Installation. Bitte aktualisiere die App.'));
+  console.error('Termxxle: dist/index.html wurde nicht gefunden.');
+  app.get('/{*splat}', (_req, res) => res.status(503).type('text/plain').send('Die Oberfläche von Termxxle fehlt in dieser Installation. Bitte aktualisiere die App.'));
 }
 
 server.on('upgrade', async (request, socket, head) => {
@@ -1566,7 +1568,7 @@ wss.on('connection', (ws, _request, session) => {
 });
 
 export async function startServer(options = {}) {
-  if (serverStarted) throw new Error('Der NexTerm-Dienst wurde bereits gestartet.');
+  if (serverStarted) throw new Error('Der Dienst von Termxxle wurde bereits gestartet.');
   if (options.dataDir) DATA_DIR = options.dataDir;
   USERS_FILE = path.join(DATA_DIR, 'users.json');
   HOSTS_FILE = path.join(DATA_DIR, 'hosts.json');
@@ -1574,7 +1576,7 @@ export async function startServer(options = {}) {
     DATA_KEY = Buffer.isBuffer(options.dataKey) ? Buffer.from(options.dataKey) : Buffer.from(String(options.dataKey), 'hex');
     if (DATA_KEY.length !== 32) throw new Error('Der lokale Tresorschlüssel muss 32 Byte lang sein.');
   }
-  if (!DATA_KEY) throw new Error('NEXTERM_DATA_KEY fehlt. Starte NexTerm über start-server.cjs oder Pelican, damit gespeicherte Kontodaten verschlüsselt werden.');
+  if (!DATA_KEY) throw new Error('TERMXXLE_DATA_KEY fehlt. Starte Termxxle über start-server.cjs oder Pelican, damit gespeicherte Kontodaten verschlüsselt werden.');
   localDesktopMode = options.localDesktop === true;
   activeHost = options.host || DEFAULT_HOST;
   activePort = options.port ?? DEFAULT_PORT;
@@ -1612,7 +1614,7 @@ export async function stopServer() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   startServer()
-    .then(({ url }) => console.log(`NexTerm Desk läuft auf ${url}`))
+    .then(({ url }) => console.log(`Termxxle läuft auf ${url}`))
     .catch(error => { console.error(error); process.exitCode = 1; });
   const shutdown = () => stopServer().finally(() => process.exit(0));
   process.on('SIGINT', shutdown);

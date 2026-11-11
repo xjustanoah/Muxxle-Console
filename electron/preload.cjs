@@ -4,7 +4,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.documentElement.classList.add('nexterm-electron');
 }, { once: true });
 
-contextBridge.exposeInMainWorld('nextermLauncher', Object.freeze({
+contextBridge.exposeInMainWorld('termxxleLauncher', Object.freeze({
   getSettings: () => ipcRenderer.invoke('launcher:get-settings'),
   useLocalVault: () => ipcRenderer.invoke('launcher:local'),
   connectServer: serverUrl => ipcRenderer.invoke('launcher:remote', serverUrl),

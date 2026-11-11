@@ -32,7 +32,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #9c89e9; outline-
 .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; color: #e9e2ff; background: linear-gradient(145deg, #846ce0, #6353a8); border: 1px solid #ad9aff55; box-shadow: 0 4px 18px #765cc536; border-radius: 9px; }
 .brand-mark svg { width: 20px; height: 20px; stroke-width: 2; }
 .brand-name { color: #f3f1fc; letter-spacing: .095em; font: 800 15px/1 Manrope, sans-serif; }
-.brand-name span { margin-left: 6px; color: #8d849f; font: 500 9px/1 'DM Mono', monospace; letter-spacing: .15em; }
 .workspace-switch { height: 53px; width: 100%; background: #171a23; border: 1px solid #252936; display: flex; align-items: center; gap: 9px; border-radius: 8px; padding: 7px 8px; cursor: pointer; text-align: left; margin-bottom: 13px; }
 .workspace-switch:hover { border-color: #3a4052; background: #191d27; }
 .workspace-avatar, .profile-avatar, .avatar-small { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; color: #dfd7ff; font: 700 12px Manrope, sans-serif; border-radius: 7px; background: linear-gradient(145deg, #554e71, #313145); }
@@ -382,15 +381,13 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
 .toast.leaving { opacity: 0; transform: translateY(-5px); transition: .2s ease; }
 .mobile-menu { display: none; margin-left: auto; }
 .auth-checking { min-height: 100vh; display: grid; place-items: center; }
-.auth-checking::after { content: 'NexTerm Desk wird geladen…'; color: #858c9d; font: 10px 'DM Mono', monospace; }
+.auth-checking::after { content: 'Termxxle wird geladen…'; color: #858c9d; font: 10px 'DM Mono', monospace; }
 .auth-checking .app-shell { display: none; }
 .auth-screen { min-height: 100vh; }
 .auth-layout { min-height: 100vh; display: grid; grid-template-columns: minmax(360px, .88fr) minmax(440px, 1.12fr); background: #10131a; }
 .auth-aside { min-height: 100vh; position: relative; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 31px 44px 24px; border-right: 1px solid #292638; background: radial-gradient(ellipse at 72% 42%, #34284b 0, #211d2d 33%, #181923 73%); }
 .auth-aside::before { position: absolute; inset: 0; content: ''; opacity: .2; background-image: linear-gradient(#b39ae411 1px, transparent 1px), linear-gradient(90deg, #b39ae411 1px, transparent 1px); background-size: 38px 38px; mask-image: linear-gradient(120deg, black, transparent 90%); pointer-events: none; }
 .auth-brand, .auth-mobile-brand { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; color: #f0eef7; font: 800 13px Manrope, sans-serif; letter-spacing: .12em; }
-.auth-brand > span:last-child, .auth-mobile-brand > span:last-child { display: flex; align-items: baseline; gap: 7px; }
-.auth-brand small, .auth-mobile-brand small { color: #978da9; font: 500 8px 'DM Mono', monospace; letter-spacing: .16em; }
 .auth-brand .brand-mark, .auth-mobile-brand .brand-mark { width: 32px; height: 32px; }
 .auth-pitch { position: relative; z-index: 1; width: min(100%, 460px); margin: auto 0; padding: 62px 0 70px; }
 .auth-local-tag { display: inline-flex; align-items: center; gap: 7px; color: #aa9ac8; font: 500 8px 'DM Mono', monospace; letter-spacing: .12em; }
@@ -579,7 +576,6 @@ kbd { padding: 2px 5px; border: 1px solid #363a46; border-radius: 4px; backgroun
   .brand-mark { width: 40px; height: 40px; }
   .brand-mark svg { width: 23px; height: 23px; }
   .brand-name { font-size: 18px; }
-  .brand-name span { font-size: 11px; }
   .workspace-switch { min-height: 68px; padding: 10px; gap: 12px; }
   .workspace-avatar, .profile-avatar, .avatar-small { width: 38px; height: 38px; font-size: 15px; }
   .workspace-copy b, .profile-copy b { font-size: 15px; }
@@ -909,7 +905,6 @@ html[data-theme] .auth-pitch h1,
 html[data-theme] .auth-feature-list b,
 html[data-theme] .empty-server-card b,
 html[data-theme] .admin-reset-row b { color: var(--text); }
-html[data-theme] .brand-name span,
 html[data-theme] .breadcrumb,
 html[data-theme] .section-heading,
 html[data-theme] .workspace-copy small,
@@ -1003,8 +998,6 @@ html[data-theme] .auth-aside { background: var(--sidebar); border-color: var(--o
 html[data-theme] .auth-aside::before { display: none; }
 html[data-theme] .auth-brand,
 html[data-theme] .auth-mobile-brand { color: var(--text); }
-html[data-theme] .auth-brand small,
-html[data-theme] .auth-mobile-brand small,
 html[data-theme] .auth-aside-bottom { color: var(--dim); }
 html[data-theme] .auth-pitch h1 em,
 html[data-theme] .auth-feature-list > div > svg { color: var(--accent); }
@@ -1101,7 +1094,7 @@ html[data-theme] .text-button:hover { color: var(--accent-hover); }
   html[data-theme] .topbar-actions { gap: 8px; }
 }
 
-/* NexTerm brand palette: violet, electric blue, and cyan on deep navy. */
+/* Termxxle brand palette: violet, electric blue, and cyan on deep navy. */
 :root {
   --brand-violet: #a64aff;
   --brand-blue: #6176ff;

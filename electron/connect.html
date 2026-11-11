@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#080c25" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
-    <title>NexTerm Desk · Verbindung wählen</title>
-    <link rel="icon" type="image/svg+xml" href="nexterm-mark.svg" />
+    <title>Termxxle · Verbindung wählen</title>
+    <link rel="icon" type="image/svg+xml" href="termxxle-mark.svg" />
     <link rel="stylesheet" href="connect.css" />
     <script defer src="connect.js"></script>
   </head>
@@ -14,26 +14,26 @@
     <main class="shell">
       <header class="brand">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48" focusable="false"><defs><linearGradient id="brand-gradient" x1="5" y1="4" x2="43" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#b54dff"/><stop offset="1" stop-color="#45d8f5"/></linearGradient></defs><rect x="1.5" y="1.5" width="45" height="45" rx="13" fill="#0b1025" stroke="url(#brand-gradient)" stroke-width="2"/><path d="m15 16 8 8-8 8M27 32h7" fill="none" stroke="url(#brand-gradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="brand-name">NexTerm <span>Desk</span></span>
+        <span class="brand-name">Termxxle</span>
         <span class="local-pill"><i></i>Desktop</span>
       </header>
       <section class="intro">
         <span class="eyebrow">SSH WORKSPACE</span>
         <h1>Wie möchtest du starten?</h1>
-        <p>Öffne deinen verschlüsselten Tresor auf diesem Gerät oder verbinde dich mit deinem NexTerm-Webserver.</p>
+        <p>Öffne deinen verschlüsselten Tresor auf diesem Gerät oder verbinde dich mit deinem Webserver.</p>
       </section>
       <section class="choices">
         <article class="choice-card local-card">
           <div class="choice-heading"><div class="choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="7" width="15" height="12" rx="2"/><path d="M8 7V5.8A4 4 0 0 1 12 2a4 4 0 0 1 4 3.8V7M12 12v2.5"/></svg></div><div class="choice-label">AUF DIESEM GERÄT</div></div>
           <h2>Lokaler Tresor</h2>
-          <p>Serverprofile und Einstellungen bleiben verschlüsselt auf deinem PC. Der Tresor startet direkt, ohne separates NexTerm-Konto.</p>
+          <p>Serverprofile und Einstellungen bleiben verschlüsselt auf deinem PC. Der Tresor startet direkt, ohne separates Konto.</p>
           <ul><li>AES-GCM-verschlüsselte Daten</li><li>Schlüssel durch Windows geschützt</li><li>Start ohne Anmeldung</li></ul>
           <button id="localButton" class="action-button quiet-button" type="button">Lokal starten <span aria-hidden="true">→</span></button>
         </article>
         <article class="choice-card remote-card">
           <div class="choice-heading"><div class="choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 5h6v6M19 5 10 14M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></div><div class="choice-label">DEIN SERVER</div></div>
           <h2>Webserver</h2>
-          <p>Melde dich mit deinem NexTerm-Konto an und öffne deine serverseitigen Verbindungen.</p>
+          <p>Melde dich mit deinem Konto auf dem Webserver an und öffne deine serverseitigen Verbindungen.</p>
           <form id="remoteForm" novalidate>
             <label for="serverUrl">Webserver-Adresse</label>
             <input id="serverUrl" name="serverUrl" type="url" autocomplete="url" placeholder="https://ssh.example.com" spellcheck="false" required />

@@ -3,25 +3,26 @@ const remoteButton = document.querySelector('#remoteButton');
 const remoteForm = document.querySelector('#remoteForm');
 const serverUrl = document.querySelector('#serverUrl');
 const message = document.querySelector('#launchMessage');
+const launcher = window.termxxleLauncher;
 
 const dragHandle = document.querySelector('.brand');
-if (typeof window.nextermLauncher.dragWindow === 'function' && dragHandle) {
+if (typeof launcher.dragWindow === 'function' && dragHandle) {
   let dragPointerId = null;
   const finishDrag = event => {
     if (event.pointerId !== dragPointerId) return;
     dragPointerId = null;
-    window.nextermLauncher.dragWindow('end');
+    launcher.dragWindow('end');
     if (dragHandle.hasPointerCapture(event.pointerId)) dragHandle.releasePointerCapture(event.pointerId);
   };
   dragHandle.addEventListener('pointerdown', event => {
     if (event.button !== 0 || event.target.closest('button, a, input, select, textarea')) return;
     dragPointerId = event.pointerId;
     dragHandle.setPointerCapture(dragPointerId);
-    window.nextermLauncher.dragWindow('start', { x: event.screenX, y: event.screenY });
+    launcher.dragWindow('start', { x: event.screenX, y: event.screenY });
     event.preventDefault();
   });
   dragHandle.addEventListener('pointermove', event => {
-    if (event.pointerId === dragPointerId) window.nextermLauncher.dragWindow('move', { x: event.screenX, y: event.screenY });
+    if (event.pointerId === dragPointerId) launcher.dragWindow('move', { x: event.screenX, y: event.screenY });
   });
   dragHandle.addEventListener('pointerup', finishDrag);
   dragHandle.addEventListener('pointercancel', finishDrag);
@@ -44,15 +45,15 @@ function setError(text) {
   message.textContent = text;
 }
 
-window.nextermLauncher.onStatus(setBusy);
-window.nextermLauncher.onError(setError);
-window.nextermLauncher.getSettings().then(settings => {
+launcher.onStatus(setBusy);
+launcher.onError(setError);
+launcher.getSettings().then(settings => {
   if (settings.serverUrl) serverUrl.value = settings.serverUrl;
 }).catch(() => {});
 
 localButton.addEventListener('click', async () => {
   setBusy('Tresor wird vorbereitet …');
-  const result = await window.nextermLauncher.useLocalVault();
+  const result = await launcher.useLocalVault();
   if (!result?.ok) {
     localButton.disabled = false;
     remoteButton.disabled = false;
@@ -62,7 +63,7 @@ localButton.addEventListener('click', async () => {
 remoteForm.addEventListener('submit', async event => {
   event.preventDefault();
   setBusy('Webserver wird geöffnet …');
-  const result = await window.nextermLauncher.connectServer(serverUrl.value);
+  const result = await launcher.connectServer(serverUrl.value);
   if (!result?.ok) {
     localButton.disabled = false;
     remoteButton.disabled = false;

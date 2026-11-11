@@ -1,6 +1,6 @@
 {
-  "name": "nexterm-desk",
-  "version": "0.3.0",
+  "name": "termxxle",
+  "version": "0.3.1",
   "description": "SSH, SFTP und Linux-Servermonitoring für Windows und Web",
   "author": "xjustanoah",
   "license": "SEE LICENSE IN LICENSE",
@@ -41,13 +41,14 @@
   },
   "build": {
     "appId": "com.nexterm.desk",
-    "productName": "NexTerm Desk",
+    "productName": "Termxxle",
     "asar": true,
     "directories": {
       "output": "release"
     },
     "files": [
       "server.js",
+      "project-env.cjs",
       "electron/**/*",
       "package.json"
     ],
@@ -58,11 +59,11 @@
       }
     ],
     "win": {
-      "icon": "electron/nexterm-app-icon.ico",
+      "icon": "electron/termxxle-app-icon.ico",
       "target": [
         "nsis"
       ],
-      "artifactName": "NexTerm-Desk-${version}-Setup.${ext}"
+      "artifactName": "Termxxle-${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
